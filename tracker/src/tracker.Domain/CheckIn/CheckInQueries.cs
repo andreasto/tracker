@@ -1,12 +1,13 @@
-namespace tracker.Domain.User;
+namespace tracker.Domain.CheckIn;
 
 /// <summary>
 /// Queries are similar to commands, but they have no side effects.
 ///
 /// They are used to retrieve information from the actors.
 /// </summary>
-public interface IUserQuery : IWithUserId
+public interface ICheckInQuery : IWithUserId
 {
 }
 
-public sealed record FetchUser(string UserId) : IUserQuery;
+public sealed record FetchCheckIns(string UserId) : ICheckInQuery;
+

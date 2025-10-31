@@ -1,19 +1,25 @@
 namespace tracker.Domain.User;
 
-public interface IUserCommands : IWithUserId
+/// <summary>
+/// Defines a command that is related to a user.
+/// </summary>
+public interface IUserCommand : IWithUserId
 {
 }
 
-public sealed record RegisterUser(string UserId, string Name, string Email) : IUserCommands;
-public sealed record UpdateUserProfile(string UserId, string Name, string Email) : IUserCommands;
-public sealed record DeactivateUser(string UserId, string Reason) : IUserCommands;
-public sealed record StartWeeklyCheckIn(string UserId, DateTime WeekStart) : IUserCommands;
-public sealed record CompleteWeeklyCheckIn(string UserId, DateTime WeekStart) : IUserCommands;
+public sealed record CreateUserCommand(string UserId, string Name, string Email) : IUserCommand;
 
-public sealed record SubmitCheckInData(
+public sealed record UpdateUserNameCommand(string UserId, string Name) : IUserCommand;
+
+public sealed record UpdateUserEmailCommand(string UserId, string Email) : IUserCommand;
+
+public sealed record UserCommandResponse(
     string UserId,
-    DateTime WeekStart,
-    double WeightKg,
-    double BodyFatPercent,
-    Dictionary<string, double> Measurements
-) : IUserCommands;
+    bool IsSuccess,
+    IUserEvent? Event = null,
+    string? ErrorMessage = null) : IUserCommand;
+
+public sealed record SubscribeToUser(string UserId, IActorRef Subscriber) : IUserCommand;
+
+public sealed record UnsubscribeToUser(string UserId, IActorRef Subscriber) : IUserCommand;
+

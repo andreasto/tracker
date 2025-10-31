@@ -13,7 +13,9 @@ using Akka.Persistence.Sql.Config;
 using Akka.Persistence.Sql.Hosting;
 using Akka.Remote.Hosting;
 using tracker.App.Actors;
+using tracker.Domain.CheckIn;
 using tracker.Domain.Counter;
+using tracker.Domain.User;
 
 namespace tracker.App.Configuration;
 
@@ -47,7 +49,8 @@ public static class AkkaConfiguration
             })
             .ConfigureNetwork(sp)
             .ConfigurePersistence(sp)
-            .ConfigureCounterActors(sp);
+            .ConfigureCheckInActors(sp)
+            .ConfigureUserActors(sp);
     }
 
     public static AkkaConfigurationBuilder ConfigureNetwork(this AkkaConfigurationBuilder builder,
@@ -194,6 +197,76 @@ public static class AkkaConfiguration
             return o switch
             {
                 IWithCounterId counterId => counterId.CounterId,
+                _ => null
+            };
+        }, o => o);
+    }
+
+    public static AkkaConfigurationBuilder ConfigureUserActors(this AkkaConfigurationBuilder builder,
+        IServiceProvider serviceProvider)
+    {
+        var settings = serviceProvider.GetRequiredService<AkkaSettings>();
+        var extractor = CreateUserMessageRouter();
+
+        if (settings.UseClustering)
+        {
+            return builder.WithShardRegion<UserActor>("user",
+                (system, registry, resolver) => s => Props.Create(() => new UserActor(s)),
+                extractor, settings.ShardOptions);
+        }
+
+        return builder.WithActors((system, registry, resolver) =>
+        {
+            var parent =
+                system.ActorOf(
+                    GenericChildPerEntityParent.Props(extractor, s => Props.Create(() => new UserActor(s))),
+                    "users");
+            registry.Register<UserActor>(parent);
+        });
+    }
+
+    public static HashCodeMessageExtractor CreateUserMessageRouter()
+    {
+        return HashCodeMessageExtractor.Create(30, o =>
+        {
+            return o switch
+            {
+                tracker.Domain.User.IWithUserId userId => userId.UserId,
+                _ => null
+            };
+        }, o => o);
+    }
+    
+    public static AkkaConfigurationBuilder ConfigureCheckInActors(this AkkaConfigurationBuilder builder,
+        IServiceProvider serviceProvider)
+    {
+        var settings = serviceProvider.GetRequiredService<AkkaSettings>();
+        var extractor = CreateCheckInMessageRouter();
+
+        if (settings.UseClustering)
+        {
+            return builder.WithShardRegion<CheckInActor>("checkin",
+                (system, registry, resolver) => s => Props.Create(() => new CheckInActor(s)),
+                extractor, settings.ShardOptions);
+        }
+
+        return builder.WithActors((system, registry, resolver) =>
+        {
+            var parent =
+                system.ActorOf(
+                    GenericChildPerEntityParent.Props(extractor, s => Props.Create(() => new CheckInActor(s))),
+                    "checkins");
+            registry.Register<CheckInActor>(parent);
+        });
+    }
+
+    public static HashCodeMessageExtractor CreateCheckInMessageRouter()
+    {
+        return HashCodeMessageExtractor.Create(30, o =>
+        {
+            return o switch
+            {
+                tracker.Domain.CheckIn.IWithUserId withUserId => withUserId.UserId,
                 _ => null
             };
         }, o => o);
