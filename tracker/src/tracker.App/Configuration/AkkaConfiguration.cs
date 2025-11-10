@@ -13,9 +13,7 @@ using Akka.Persistence.Sql.Config;
 using Akka.Persistence.Sql.Hosting;
 using Akka.Remote.Hosting;
 using tracker.App.Actors;
-using tracker.Domain.CheckIn;
 using tracker.Domain.Counter;
-using tracker.Domain.User;
 
 namespace tracker.App.Configuration;
 

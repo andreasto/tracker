@@ -13,6 +13,15 @@ public sealed record UpdateUserNameCommand(string UserId, string Name) : IUserCo
 
 public sealed record UpdateUserEmailCommand(string UserId, string Email) : IUserCommand;
 
+public sealed record AnswerQuestionnaireCommand(string UserId, Dictionary<string, string> Answers) : IUserCommand;
+
+public sealed record ProvideStartValuesCommand(
+    string UserId, 
+    double StartWeight, 
+    Dictionary<string, double> Measurements) : IUserCommand;
+
+public sealed record CompleteOnboardingCommand(string UserId) : IUserCommand;
+
 public sealed record UserCommandResponse(
     string UserId,
     bool IsSuccess,
@@ -22,4 +31,5 @@ public sealed record UserCommandResponse(
 public sealed record SubscribeToUser(string UserId, IActorRef Subscriber) : IUserCommand;
 
 public sealed record UnsubscribeToUser(string UserId, IActorRef Subscriber) : IUserCommand;
+
 

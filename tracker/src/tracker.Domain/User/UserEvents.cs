@@ -13,3 +13,12 @@ public sealed record UserNameUpdated(string UserId, string Name) : IUserEvent;
 
 public sealed record UserEmailUpdated(string UserId, string Email) : IUserEvent;
 
+public sealed record QuestionnaireAnswered(string UserId, Dictionary<string, string> Answers) : IUserEvent;
+
+public sealed record StartValuesProvided(
+    string UserId, 
+    double StartWeight, 
+    Dictionary<string, double> Measurements) : IUserEvent;
+
+public sealed record UserOnboardingCompleted(string UserId) : IUserEvent;
+

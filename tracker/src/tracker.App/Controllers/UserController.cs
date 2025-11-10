@@ -70,10 +70,57 @@ public class UserController : ControllerBase
 
         return Ok(result.Event);
     }
+
+    [HttpPost("{userId}/questionnaire")]
+    public async Task<IActionResult> AnswerQuestionnaire(string userId, [FromBody] AnswerQuestionnaireRequest request)
+    {
+        var result = await _userActor.Ask<UserCommandResponse>(
+            new AnswerQuestionnaireCommand(userId, request.Answers),
+            TimeSpan.FromSeconds(5));
+        
+        if (!result.IsSuccess)
+        {
+            return BadRequest(result.ErrorMessage);
+        }
+
+        return Ok(result.Event);
+    }
+
+    [HttpPost("{userId}/start-values")]
+    public async Task<IActionResult> ProvideStartValues(string userId, [FromBody] ProvideStartValuesRequest request)
+    {
+        var result = await _userActor.Ask<UserCommandResponse>(
+            new ProvideStartValuesCommand(userId, request.StartWeight, request.Measurements),
+            TimeSpan.FromSeconds(5));
+        
+        if (!result.IsSuccess)
+        {
+            return BadRequest(result.ErrorMessage);
+        }
+
+        return Ok(result.Event);
+    }
+
+    [HttpPost("{userId}/complete-onboarding")]
+    public async Task<IActionResult> CompleteOnboarding(string userId)
+    {
+        var result = await _userActor.Ask<UserCommandResponse>(
+            new CompleteOnboardingCommand(userId),
+            TimeSpan.FromSeconds(5));
+        
+        if (!result.IsSuccess)
+        {
+            return BadRequest(result.ErrorMessage);
+        }
+
+        return Ok(result.Event);
+    }
 }
 
 public record CreateUserRequest(string Name, string Email);
 public record UpdateNameRequest(string Name);
 public record UpdateEmailRequest(string Email);
+public record AnswerQuestionnaireRequest(Dictionary<string, string> Answers);
+public record ProvideStartValuesRequest(double StartWeight, Dictionary<string, double> Measurements);
 
 

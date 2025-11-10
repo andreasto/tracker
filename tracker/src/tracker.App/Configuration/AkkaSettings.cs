@@ -1,27 +1,9 @@
 ﻿using System.Net;
 using Akka.Cluster.Hosting;
+using Akka.Management;
 using Akka.Remote.Hosting;
 
 namespace tracker.App.Configuration;
-
-public class AkkaManagementOptions
-{
-    public bool Enabled { get; set; } = false;
-    public string Hostname { get; set; } = Dns.GetHostName();
-    public int Port { get; set; } = 8558;
-    public string PortName { get; set; } = "management";
-
-    public string ServiceName { get; set; } = "akka-management";
-
-    /// <summary>
-    /// Determines the number of nodes we need to make contact with in order to form a cluster initially.
-    ///
-    /// 3 is a safe default value.
-    /// </summary>
-    public int RequiredContactPointsNr { get; set; } = 3;
-
-    public DiscoveryMethod DiscoveryMethod { get; set; } = DiscoveryMethod.Config;
-}
 
 /// <summary>
 /// Determines which Akka.Discovery method to use when discovering other nodes to form and join clusters.
@@ -47,13 +29,24 @@ public class AzureStorageSettings
     public string ConnectionStringName { get; set; } = "Azurite";
 }
 
+public class AkkaManagementOptions
+{
+    public bool Enabled { get; set; }
+    public string Hostname { get; set; } = "localhost";
+    public int Port { get; set; } = 8558;
+    public string ServiceName { get; set; } = "TrackerApi";
+    public string PortName { get; set; } = "management";
+    public int RequiredContactPointsNr { get; set; } = 1;
+    public DiscoveryMethod DiscoveryMethod { get; set; } = DiscoveryMethod.Config;
+}
+
 public class AkkaSettings
 {
     public string ActorSystemName { get; set; } = "TrackerApi";
 
     public bool UseClustering { get; set; } = true;
 
-    public bool LogConfigOnStart { get; set; } = false;
+    public bool LogConfigOnStart { get; set; }
 
     public RemoteOptions RemoteOptions { get; set; } = new()
     {
@@ -73,3 +66,4 @@ public class AkkaSettings
 
     public AkkaManagementOptions? AkkaManagementOptions { get; set; }
 }
+

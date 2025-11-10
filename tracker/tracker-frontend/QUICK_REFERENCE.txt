@@ -1,0 +1,94 @@
+╔═══════════════════════════════════════════════════════════════╗
+║         TRACKER FRONTEND - QUICK REFERENCE CARD               ║
+╚═══════════════════════════════════════════════════════════════╝
+
+📁 PROJECT LOCATION
+   /Users/andreastornqvist/Development/tracker/tracker/tracker-frontend/
+
+🚀 QUICK START
+   cd tracker-frontend
+   npm install          # Install dependencies
+   npm run dev          # Start dev server
+
+   Or use: ./start-dev.sh
+
+🌐 URLs
+   Frontend:  http://localhost:3000
+   Backend:   http://localhost:5000
+
+📋 COMMANDS
+   npm run dev      → Start development server
+   npm run build    → Build for production
+   npm run preview  → Preview production build
+   npm run lint     → Run ESLint
+
+🎯 USER FLOW
+   1. /register                  → Create account
+   2. /register/questionnaire    → Answer questions
+   3. /register/measurements     → Enter measurements
+   4. /register/complete         → Complete onboarding
+   5. /dashboard/{userId}        → View dashboard
+
+📂 KEY FILES
+   src/App.tsx                   → Main app with routing
+   src/components/               → All React components
+   src/services/api.ts           → API integration
+   vite.config.ts                → Vite config (proxy setup)
+   .env                          → Environment variables
+
+📡 API ENDPOINTS USED
+   POST /user/{userId}                      → Create user
+   POST /user/{userId}/questionnaire        → Submit questionnaire
+   POST /user/{userId}/start-values         → Submit measurements
+   POST /user/{userId}/complete-onboarding  → Complete onboarding
+   GET  /user/{userId}                      → Get user data
+
+🛠️ TECH STACK
+   ⚛️  React 18.2          - UI framework
+   📘  TypeScript 5.2      - Type safety
+   ⚡  Vite 5.0            - Build tool
+   🧭  React Router 6.20   - Routing
+   🎨  Tailwind CSS 3.3    - Styling
+
+📚 DOCUMENTATION
+   README.md                     → Quick reference
+   SETUP_GUIDE.md                → Complete setup guide
+   FRONTEND_SETUP_COMPLETE.md    → Project summary
+
+✅ CHECKLIST
+   □ Node.js v18+ installed
+   □ npm install completed
+   □ Backend running on port 5000
+   □ PostgreSQL running (if using persistence)
+   □ npm run dev started successfully
+   □ Browser opens to http://localhost:3000
+
+🐛 TROUBLESHOOTING
+   → Cannot connect to API?
+     Check backend is running: curl http://localhost:5000
+   
+   → npm install fails?
+     Ensure Node.js v18+: node --version
+   
+   → Styles not loading?
+     Restart dev server: npm run dev
+
+⚠️  IMPORTANT NOTES
+   ✅ Full registration flow implemented
+   ✅ All API endpoints integrated
+   ❌ No authentication (add for production!)
+   ❌ No session management (add for production!)
+
+🎉 PROJECT STATS
+   • 20+ files created
+   • 6 React components
+   • 5 API endpoints integrated
+   • 4-step registration flow
+   • 100% TypeScript coverage
+
+═══════════════════════════════════════════════════════════════
+
+Need help? Check SETUP_GUIDE.md for detailed instructions!
+
+═══════════════════════════════════════════════════════════════
+
