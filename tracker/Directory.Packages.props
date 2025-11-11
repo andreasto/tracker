@@ -31,6 +31,12 @@
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="7.2.0" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
   </ItemGroup>
+  <!-- Database Migration Package Versions -->
+  <ItemGroup>
+    <PackageVersion Include="FluentMigrator" Version="5.2.0" />
+    <PackageVersion Include="FluentMigrator.Runner" Version="5.2.0" />
+    <PackageVersion Include="FluentMigrator.Runner.Postgres" Version="5.2.0" />
+  </ItemGroup>
   <!-- Test Package Versions -->
   <ItemGroup>
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />

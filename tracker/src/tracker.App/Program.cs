@@ -22,7 +22,12 @@ if (akkaSettings?.PersistenceMode == PersistenceMode.PostgreSql)
     if (!string.IsNullOrEmpty(connectionString))
     {
         var logger = LoggerFactory.Create(b => b.AddConsole()).CreateLogger("DatabaseInitializer");
+        
+        // Initialize Akka persistence tables
         await DatabaseInitializer.InitializeDatabase(connectionString, logger);
+        
+        // Add FluentMigrator services for application migrations
+        builder.Services.AddDatabaseMigrations(connectionString);
     }
 }
 
@@ -52,6 +57,16 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// Run database migrations if PostgreSQL is configured
+if (akkaSettings?.PersistenceMode == PersistenceMode.PostgreSql)
+{
+    var connectionString = builder.Configuration.GetConnectionString("PostgreSql");
+    if (!string.IsNullOrEmpty(connectionString))
+    {
+        app.UseDatabaseMigrations();
+    }
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName.Equals("Azure"))

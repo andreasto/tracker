@@ -31,6 +31,9 @@
         <PackageReference Include="Petabridge.Cmd.Cluster.Sharding" />
         <PackageReference Include="Petabridge.Cmd.Remote" />
         <PackageReference Include="Swashbuckle.AspNetCore" />
+        <PackageReference Include="FluentMigrator" />
+        <PackageReference Include="FluentMigrator.Runner" />
+        <PackageReference Include="FluentMigrator.Runner.Postgres" />
     </ItemGroup>
 
     <ItemGroup>
