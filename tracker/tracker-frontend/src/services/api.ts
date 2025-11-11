@@ -9,6 +9,8 @@ export interface User {
   questionnaireAnswers?: Record<string, string>
   startWeight?: number
   measurements?: Record<string, number>
+  bmrBase?: number
+  bmrWithActivityLevel?: number
 }
 
 export interface CreateUserRequest {

@@ -48,6 +48,9 @@ public class UserActorOnboardingSpecs : TestKit
         // act & assert - Step 3: Answer Questionnaire
         userActor.Tell(new AnswerQuestionnaireCommand(userId, new Dictionary<string, string>
         {
+            { "gender", "male" },
+            { "age", "30" },
+            { "height", "180" },
             { "activityLevel", "moderate" },
             { "goals", "weight-loss" },
             { "dietaryRestrictions", "none" }
@@ -88,10 +91,16 @@ public class UserActorOnboardingSpecs : TestKit
         completeResponse.IsSuccess.Should().BeTrue();
         completeResponse.Event.Should().BeOfType<UserOnboardingCompleted>();
         
-        // Verify final state
+        // Verify final state with calculated BMR
         userActor.Tell(new FetchUser(userId), TestActor);
         var user4 = ExpectMsg<User>();
         user4.OnboardingState.Should().Be(UserOnboardingState.Complete);
+        user4.BmrBase.Should().NotBeNull();
+        user4.BmrWithActivityLevel.Should().NotBeNull();
+        // For male, 30 years, 180cm, 75.5kg: BMR = 66.5 + (13.75 × 75.5) + (5.003 × 180) - (6.75 × 30) = 1741.2625
+        user4.BmrBase.Should().BeApproximately(1741.26, 0.1);
+        // With moderate activity (1.55): 1741.26 * 1.55 = 2698.96
+        user4.BmrWithActivityLevel.Should().BeApproximately(2698.96, 0.1);
     }
 
     [Fact]
@@ -107,7 +116,10 @@ public class UserActorOnboardingSpecs : TestKit
         
         userActor.Tell(new AnswerQuestionnaireCommand(userId, new Dictionary<string, string>
         {
-            { "activityLevel", "high" }
+            { "gender", "female" },
+            { "age", "25" },
+            { "height", "165" },
+            { "activityLevel", "lightly active" }
         }), TestActor);
         ExpectMsg<UserCommandResponse>();
         

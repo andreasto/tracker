@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { api } from '../services/api'
+import { useState, useEffect } from 'react'
+import { api, User } from '../services/api'
 
 interface CompletionScreenProps {
   userId: string
@@ -9,6 +9,19 @@ interface CompletionScreenProps {
 export default function CompletionScreen({ userId, onComplete }: CompletionScreenProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [user, setUser] = useState<User | null>(null)
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const userData = await api.getUser(userId)
+        setUser(userData)
+      } catch (err) {
+        console.error('Failed to fetch user data:', err)
+      }
+    }
+    fetchUser()
+  }, [userId])
 
   const handleComplete = async () => {
     setError(null)
@@ -16,6 +29,9 @@ export default function CompletionScreen({ userId, onComplete }: CompletionScree
 
     try {
       await api.completeOnboarding(userId)
+      // Fetch updated user data with BMR
+      const updatedUser = await api.getUser(userId)
+      setUser(updatedUser)
       onComplete()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to complete onboarding')
@@ -59,6 +75,30 @@ export default function CompletionScreen({ userId, onComplete }: CompletionScree
             Save this ID - you'll need it to access your account
           </p>
         </div>
+
+        {user?.bmrBase && user?.bmrWithActivityLevel && (
+          <div className="bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-200 rounded-lg p-6 mb-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">
+              🎯 Your Personalized Calorie Targets
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="text-center">
+                <p className="text-sm text-gray-600 mb-1">Base BMR</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {Math.round(user.bmrBase)}
+                </p>
+                <p className="text-xs text-gray-500">kcal/day</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-gray-600 mb-1">Daily Target</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {Math.round(user.bmrWithActivityLevel)}
+                </p>
+                <p className="text-xs text-gray-500">kcal/day</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">

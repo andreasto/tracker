@@ -127,6 +127,35 @@ export default function Dashboard() {
                 </dl>
               </div>
             )}
+
+            {/* BMR Information */}
+            {user.bmrBase && user.bmrWithActivityLevel && (
+              <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-200">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                  💪 Your Calorie Needs
+                </h2>
+                <dl className="space-y-3">
+                  <div>
+                    <dt className="text-sm font-medium text-gray-600">Base Metabolic Rate (BMR)</dt>
+                    <dd className="text-2xl font-bold text-blue-600">
+                      {Math.round(user.bmrBase)} <span className="text-sm font-normal text-gray-600">kcal/day</span>
+                    </dd>
+                    <dd className="text-xs text-gray-500 mt-1">
+                      Calories burned at rest
+                    </dd>
+                  </div>
+                  <div className="pt-3 border-t border-blue-200">
+                    <dt className="text-sm font-medium text-gray-600">Daily Calorie Target</dt>
+                    <dd className="text-2xl font-bold text-green-600">
+                      {Math.round(user.bmrWithActivityLevel)} <span className="text-sm font-normal text-gray-600">kcal/day</span>
+                    </dd>
+                    <dd className="text-xs text-gray-500 mt-1">
+                      Including activity level
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            )}
           </div>
 
           <div className="mt-8 pt-6 border-t border-gray-200">

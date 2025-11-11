@@ -20,5 +20,8 @@ public sealed record StartValuesProvided(
     double StartWeight, 
     Dictionary<string, double> Measurements) : IUserEvent;
 
-public sealed record UserOnboardingCompleted(string UserId) : IUserEvent;
+public sealed record UserOnboardingCompleted(
+    string UserId, 
+    double BmrBase, 
+    double BmrWithActivityLevel) : IUserEvent;
 

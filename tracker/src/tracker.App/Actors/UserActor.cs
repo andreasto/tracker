@@ -13,7 +13,9 @@ public record User(
     UserOnboardingState OnboardingState = UserOnboardingState.NotStarted,
     Dictionary<string, string>? QuestionnaireAnswers = null,
     double? StartWeight = null,
-    Dictionary<string, double>? StartMeasurements = null)
+    Dictionary<string, double>? StartMeasurements = null,
+    double? BmrBase = null,
+    double? BmrWithActivityLevel = null)
 {
 }
 
@@ -26,8 +28,81 @@ public enum UserOnboardingState
     Complete
 }
 
+public static class BmrCalculator
+{
+    public static (double bmrBase, double bmrWithActivityLevel) Calculate(
+        User user)
+    {
+        if (user.QuestionnaireAnswers == null || user.StartWeight == null)
+        {
+            throw new InvalidOperationException("Cannot calculate BMR without questionnaire answers and start weight");
+        }
+
+        // Extract required data from questionnaire
+        if (!user.QuestionnaireAnswers.TryGetValue("gender", out var gender))
+            throw new InvalidOperationException("Gender is required to calculate BMR");
+        
+        if (!user.QuestionnaireAnswers.TryGetValue("age", out var ageStr) || !int.TryParse(ageStr, out var age))
+            throw new InvalidOperationException("Valid age is required to calculate BMR");
+        
+        if (!user.QuestionnaireAnswers.TryGetValue("height", out var heightStr) || !double.TryParse(heightStr, out var height))
+            throw new InvalidOperationException("Valid height (in cm) is required to calculate BMR");
+        
+        if (!user.QuestionnaireAnswers.TryGetValue("activityLevel", out var activityLevel))
+            throw new InvalidOperationException("Activity level is required to calculate BMR");
+
+        var weight = user.StartWeight.Value;
+
+        // Calculate base BMR using Mifflin-St Jeor Equation
+        double bmrBase;
+        if (gender.ToLowerInvariant() == "male" || gender.ToLowerInvariant() == "m")
+        {
+            // For men: BMR = 66.5 + (13.75 × weight in kg) + (5.003 × height in cm) - (6.75 × age)
+            bmrBase = 66.5 + (13.75 * weight) + (5.003 * height) - (6.75 * age);
+        }
+        else if (gender.ToLowerInvariant() == "female" || gender.ToLowerInvariant() == "f")
+        {
+            // For women: BMR = 655.1 + (9.563 × weight in kg) + (1.850 × height in cm) - (4.676 × age)
+            bmrBase = 655.1 + (9.563 * weight) + (1.850 * height) - (4.676 * age);
+        }
+        else
+        {
+            throw new InvalidOperationException($"Invalid gender value: {gender}. Must be 'male', 'm', 'female', or 'f'");
+        }
+
+        // Calculate BMR with activity level multiplier
+        double activityMultiplier = activityLevel.ToLowerInvariant() switch
+        {
+            "sedentary" => 1.2,
+            "lightly active" or "lightlyactive" or "lightly_active" => 1.375,
+            "moderately active" or "moderatelyactive" or "moderately_active" or "moderate" => 1.55,
+            "very active" or "veryactive" or "very_active" => 1.725,
+            "extra active" or "extraactive" or "extra_active" => 1.9,
+            _ => throw new InvalidOperationException($"Invalid activity level: {activityLevel}")
+        };
+
+        double bmrWithActivityLevel = bmrBase * activityMultiplier;
+
+        return (bmrBase, bmrWithActivityLevel);
+    }
+}
+
 public static class UserExtensions
 {
+    private static UserCommandResponse CompleteOnboardingWithBmr(User user, CompleteOnboardingCommand complete)
+    {
+        try
+        {
+            var (bmrBase, bmrWithActivityLevel) = BmrCalculator.Calculate(user);
+            return new UserCommandResponse(user.UserId, true, 
+                new UserOnboardingCompleted(complete.UserId, bmrBase, bmrWithActivityLevel));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new UserCommandResponse(user.UserId, false, ErrorMessage: ex.Message);
+        }
+    }
+
     public static UserCommandResponse ProcessCommand(this User user, IUserCommand command)
     {
         return command switch
@@ -58,7 +133,7 @@ public static class UserExtensions
                 new UserCommandResponse(user.UserId, false, ErrorMessage: $"Cannot provide start values in state: {user.OnboardingState}"),
             
             CompleteOnboardingCommand complete when user.OnboardingState == UserOnboardingState.StartValuesProvided =>
-                new UserCommandResponse(user.UserId, true, new UserOnboardingCompleted(complete.UserId)),
+                CompleteOnboardingWithBmr(user, complete),
             CompleteOnboardingCommand _ when user.OnboardingState != UserOnboardingState.StartValuesProvided =>
                 new UserCommandResponse(user.UserId, false, ErrorMessage: $"Cannot complete onboarding in state: {user.OnboardingState}"),
             
@@ -90,7 +165,12 @@ public static class UserExtensions
                 StartMeasurements = provided.Measurements,
                 OnboardingState = UserOnboardingState.StartValuesProvided
             },
-            UserOnboardingCompleted _ => user with { OnboardingState = UserOnboardingState.Complete },
+            UserOnboardingCompleted completed => user with 
+            { 
+                OnboardingState = UserOnboardingState.Complete,
+                BmrBase = completed.BmrBase,
+                BmrWithActivityLevel = completed.BmrWithActivityLevel
+            },
             _ => throw new InvalidOperationException($"Unknown event type: {@event.GetType().Name}")
         };
     }

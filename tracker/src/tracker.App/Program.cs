@@ -39,6 +39,18 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Add CORS support
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:5555")
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
+    });
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -49,6 +61,10 @@ if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName.Equals("A
 }
 
 app.UseHttpsRedirection();
+
+// Enable CORS
+app.UseCors("AllowFrontend");
+
 app.MapAkkaHealthCheckRoutes(optionConfigure: (_, opt) =>
 {
     // Use a custom response writer to output a json of all reported statuses

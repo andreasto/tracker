@@ -6,9 +6,21 @@ interface QuestionnaireProps {
   onComplete: () => void
 }
 
-const questions = [
+interface Question {
+  id: string
+  label: string
+  type: 'select' | 'number' | 'text'
+  options?: string[]
+  placeholder?: string
+  required?: boolean
+}
+
+const questions: Question[] = [
+  { id: 'gender', label: 'What is your gender?', type: 'select', options: ['Male', 'Female'], required: true },
+  { id: 'age', label: 'What is your age?', type: 'number', placeholder: 'Enter your age', required: true },
+  { id: 'height', label: 'What is your height? (in cm)', type: 'number', placeholder: 'e.g., 180', required: true },
+  { id: 'activityLevel', label: 'How active are you?', type: 'select', options: ['Sedentary', 'Lightly Active', 'Moderately Active', 'Very Active', 'Extra Active'], required: true },
   { id: 'goal', label: 'What is your primary goal?', type: 'select', options: ['Lose Weight', 'Gain Muscle', 'Maintain Weight', 'Improve Health'] },
-  { id: 'activityLevel', label: 'How active are you?', type: 'select', options: ['Sedentary', 'Lightly Active', 'Moderately Active', 'Very Active', 'Extremely Active'] },
   { id: 'experience', label: 'How experienced are you with tracking?', type: 'select', options: ['Beginner', 'Intermediate', 'Advanced'] },
   { id: 'motivation', label: 'What motivates you most?', type: 'text' },
 ]
@@ -37,7 +49,9 @@ export default function Questionnaire({ userId, onComplete }: QuestionnaireProps
     }
   }
 
-  const isFormValid = questions.every(q => answers[q.id]?.trim())
+  const isFormValid = questions
+    .filter(q => q.required)
+    .every(q => answers[q.id]?.trim())
 
   return (
     <div className="bg-white rounded-lg shadow-md p-8">
@@ -53,6 +67,7 @@ export default function Questionnaire({ userId, onComplete }: QuestionnaireProps
           <div key={question.id}>
             <label htmlFor={question.id} className="block text-sm font-medium text-gray-700 mb-2">
               {question.label}
+              {question.required && <span className="text-red-500 ml-1">*</span>}
             </label>
             {question.type === 'select' ? (
               <select
@@ -60,7 +75,7 @@ export default function Questionnaire({ userId, onComplete }: QuestionnaireProps
                 value={answers[question.id] || ''}
                 onChange={(e) => handleChange(question.id, e.target.value)}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                required
+                required={question.required}
               >
                 <option value="">Select an option</option>
                 {question.options?.map((option) => (
@@ -69,15 +84,27 @@ export default function Questionnaire({ userId, onComplete }: QuestionnaireProps
                   </option>
                 ))}
               </select>
+            ) : question.type === 'number' ? (
+              <input
+                id={question.id}
+                type="number"
+                value={answers[question.id] || ''}
+                onChange={(e) => handleChange(question.id, e.target.value)}
+                placeholder={question.placeholder || 'Enter a number'}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                required={question.required}
+                min="1"
+                step="1"
+              />
             ) : (
               <input
                 id={question.id}
                 type="text"
                 value={answers[question.id] || ''}
                 onChange={(e) => handleChange(question.id, e.target.value)}
-                placeholder="Type your answer..."
+                placeholder={question.placeholder || 'Type your answer...'}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                required
+                required={question.required}
               />
             )}
           </div>
