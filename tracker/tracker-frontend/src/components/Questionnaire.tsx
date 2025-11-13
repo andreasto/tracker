@@ -20,6 +20,7 @@ const questions: Question[] = [
   { id: 'age', label: 'What is your age?', type: 'number', placeholder: 'Enter your age', required: true },
   { id: 'height', label: 'What is your height? (in cm)', type: 'number', placeholder: 'e.g., 180', required: true },
   { id: 'activityLevel', label: 'How active are you?', type: 'select', options: ['Sedentary', 'Lightly Active', 'Moderately Active', 'Very Active', 'Extra Active'], required: true },
+  { id: 'mealsPerDay', label: 'How many meals do you prefer per day?', type: 'select', options: ['3', '4', '5'], required: true },
   { id: 'goal', label: 'What is your primary goal?', type: 'select', options: ['Lose Weight', 'Gain Muscle', 'Maintain Weight', 'Improve Health'] },
   { id: 'experience', label: 'How experienced are you with tracking?', type: 'select', options: ['Beginner', 'Intermediate', 'Advanced'] },
   { id: 'motivation', label: 'What motivates you most?', type: 'text' },

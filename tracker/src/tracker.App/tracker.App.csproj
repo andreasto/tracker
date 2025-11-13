@@ -34,6 +34,7 @@
         <PackageReference Include="FluentMigrator" />
         <PackageReference Include="FluentMigrator.Runner" />
         <PackageReference Include="FluentMigrator.Runner.Postgres" />
+        <PackageReference Include="Dapper" />
     </ItemGroup>
 
     <ItemGroup>

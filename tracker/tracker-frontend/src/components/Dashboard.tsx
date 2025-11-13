@@ -1,29 +1,48 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { api, User } from '../services/api'
+import { api, User, CheckInState, SubmitCheckInRequest } from '../services/api'
+import ProgressChart from './ProgressChart'
+import CheckInForm from './CheckInForm'
 
 export default function Dashboard() {
   const { userId } = useParams<{ userId: string }>()
   const [user, setUser] = useState<User | null>(null)
+  const [checkIns, setCheckIns] = useState<CheckInState | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showCheckInForm, setShowCheckInForm] = useState(false)
 
   useEffect(() => {
-    const fetchUser = async () => {
+    const fetchData = async () => {
       if (!userId) return
 
       try {
-        const userData = await api.getUser(userId)
+        const [userData, checkInData] = await Promise.all([
+          api.getUser(userId),
+          api.getCheckIns(userId),
+        ])
         setUser(userData)
+        setCheckIns(checkInData)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load user data')
+        setError(err instanceof Error ? err.message : 'Failed to load data')
       } finally {
         setLoading(false)
       }
     }
 
-    fetchUser()
+    fetchData()
   }, [userId])
+
+  const handleSubmitCheckIn = async (checkInData: SubmitCheckInRequest) => {
+    if (!userId) return
+
+    await api.submitCheckIn(userId, checkInData)
+    
+    // Refresh check-in data
+    const updatedCheckIns = await api.getCheckIns(userId)
+    setCheckIns(updatedCheckIns)
+    setShowCheckInForm(false)
+  }
 
   if (loading) {
     return (
@@ -48,12 +67,32 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white shadow rounded-lg p-6">
-          <div className="border-b border-gray-200 pb-4 mb-6">
-            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="mt-1 text-sm text-gray-500">Welcome back, {user.name}!</p>
+      <div className="max-w-7xl mx-auto">
+        <div className="bg-white shadow rounded-lg p-6 mb-6">
+          <div className="border-b border-gray-200 pb-4 mb-6 flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+              <p className="mt-1 text-sm text-gray-500">Welcome back, {user.name}!</p>
+            </div>
+            <button
+              onClick={() => setShowCheckInForm(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
+            >
+              📊 New Check-In
+            </button>
           </div>
+
+          {/* Progress Chart */}
+          {checkIns && (
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Progress Tracking</h2>
+              <ProgressChart
+                checkIns={checkIns.checkInHistory || []}
+                startWeight={user.startWeight}
+                startMeasurements={user.measurements}
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* User Profile */}
@@ -164,6 +203,18 @@ export default function Dashboard() {
             </p>
           </div>
         </div>
+
+        {/* Check-In Form Modal */}
+        {showCheckInForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <CheckInForm
+                onSubmit={handleSubmitCheckIn}
+                onCancel={() => setShowCheckInForm(false)}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

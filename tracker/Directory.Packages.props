@@ -36,6 +36,7 @@
     <PackageVersion Include="FluentMigrator" Version="5.2.0" />
     <PackageVersion Include="FluentMigrator.Runner" Version="5.2.0" />
     <PackageVersion Include="FluentMigrator.Runner.Postgres" Version="5.2.0" />
+    <PackageVersion Include="Dapper" Version="2.1.35" />
   </ItemGroup>
   <!-- Test Package Versions -->
   <ItemGroup>

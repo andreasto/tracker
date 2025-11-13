@@ -1,6 +1,8 @@
 using Akka.HealthCheck.Hosting;
 using Akka.HealthCheck.Hosting.Web;
 using tracker.App.Configuration;
+using tracker.App.Services;
+using tracker.Domain.MealPlan;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,6 +30,9 @@ if (akkaSettings?.PersistenceMode == PersistenceMode.PostgreSql)
         
         // Add FluentMigrator services for application migrations
         builder.Services.AddDatabaseMigrations(connectionString);
+        
+        // Register MealPlanService
+        builder.Services.AddSingleton<IMealPlanService>(sp => new MealPlanService(connectionString));
     }
 }
 
