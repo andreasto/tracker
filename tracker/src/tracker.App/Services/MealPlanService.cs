@@ -95,9 +95,9 @@ public class MealPlanService : IMealPlanService
                         transaction);
 
                     // Insert meals for the day
-                    foreach (var mealType in distribution.Keys)
+                    foreach (var meal in distribution)
                     {
-                        var calorieTarget = bmrWithActivityLevel * distribution[mealType];
+                        var calorieTarget = bmrWithActivityLevel * meal.Percentage;
 
                         await connection.ExecuteAsync(
                             @"INSERT INTO mealplan_meals (day_id, meal_type, calorie_target)
@@ -105,7 +105,7 @@ public class MealPlanService : IMealPlanService
                             new
                             {
                                 DayId = dayId,
-                                MealType = mealType,
+                                MealType = meal.MealType,
                                 CalorieTarget = calorieTarget
                             },
                             transaction);

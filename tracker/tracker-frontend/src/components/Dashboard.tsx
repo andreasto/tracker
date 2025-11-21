@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { api, User, CheckInState, SubmitCheckInRequest } from '../services/api'
+import { api, User, CheckInState, SubmitCheckInRequest, UserOnboardingState } from '../services/api'
 import ProgressChart from './ProgressChart'
 import CheckInForm from './CheckInForm'
 import CheckInList from './CheckInList'
@@ -92,6 +92,12 @@ export default function Dashboard() {
             </div>
             <div className="flex gap-3">
               <button
+                onClick={() => navigate('/meal-plan/create')}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium"
+              >
+                🍽️ Create Meal Plan
+              </button>
+              <button
                 onClick={() => setShowCheckInForm(true)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
               >
@@ -151,7 +157,7 @@ export default function Dashboard() {
                   <dt className="text-sm font-medium text-gray-500">Status</dt>
                   <dd className="text-sm">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      {user.onboardingState == '4' ? '✅ Onboarding Completed' : '🚀 Onboarding In Progress'}
+                      {user.onboardingState === UserOnboardingState.Complete ? '✅ Onboarding Completed' : '🚀 Onboarding In Progress'}
                     </span>
                   </dd>
                 </div>

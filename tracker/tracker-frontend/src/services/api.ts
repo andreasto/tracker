@@ -29,11 +29,20 @@ export const tokenManager = {
   }
 }
 
+// Enum matching backend UserOnboardingState
+export enum UserOnboardingState {
+  NotStarted = 0,
+  Registered = 1,
+  QuestionnaireAnswered = 2,
+  StartValuesProvided = 3,
+  Complete = 4
+}
+
 export interface User {
   userId: string
   name: string
   email: string
-  onboardingState: string
+  onboardingState: number // 0=NotStarted, 1=Registered, 2=QuestionnaireAnswered, 3=StartValuesProvided, 4=Complete
   questionnaireAnswers?: Record<string, string>
   startWeight?: number
   measurements?: Record<string, number>
@@ -120,6 +129,60 @@ export interface SubmitCheckInRequest {
   stomach: number
   chest: number
   overarm: number
+}
+
+export interface CreateMealPlanRequest {
+  planName: string
+  startDate: string
+  endDate?: string
+}
+
+export interface CreateMealPlanResponse {
+  mealPlanId: number
+  message: string
+}
+
+export interface MealPlan {
+  mealPlanId: number
+  userId: string
+  planName: string
+  startDate: string
+  endDate?: string
+  createdAt: string
+  totalKcal?: number
+  totalProtein?: number
+  totalCarbs?: number
+  totalFat?: number
+}
+
+export interface MealPlanDay {
+  mealPlanDayId: number
+  mealPlanId: number
+  date: string
+  dayNumber: number
+}
+
+export interface MealPlanMeal {
+  mealPlanMealId: number
+  mealPlanDayId: number
+  recipeId?: number
+  recipeName: string
+  mealType: string
+  kcal: number
+  protein: number
+  carbs: number
+  fat: number
+  mealOrder: number
+}
+
+export interface MealPlanDetails {
+  plan: MealPlan
+  days: DayWithMeals[]
+}
+
+export interface DayWithMeals {
+  day: MealPlanDay
+  meals: MealPlanMeal[]
 }
 
 // Helper function to get auth headers
@@ -452,6 +515,51 @@ export const api = {
     }
     
     return data
+  },
+
+  // Meal Plan APIs
+  async createMealPlan(userId: string, request: CreateMealPlanRequest): Promise<CreateMealPlanResponse> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/mealplan/${userId}`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(error || 'Failed to create meal plan')
+    }
+
+    return response.json()
+  },
+
+  async getMealPlan(mealPlanId: number): Promise<MealPlan> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/mealplan/${mealPlanId}`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch meal plan')
+    }
+
+    return response.json()
+  },
+
+  async getMealPlanDetails(mealPlanId: number): Promise<MealPlanDetails> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/mealplan/${mealPlanId}/details`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch meal plan details')
+    }
+
+    return response.json()
+  },
+
+  async getUserMealPlans(userId: string): Promise<MealPlan[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/mealplan/user/${userId}`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch user meal plans')
+    }
+
+    return response.json()
   },
 }
 

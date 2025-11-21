@@ -169,10 +169,11 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:5555")
+        policy.WithOrigins("http://localhost:5555", "http://localhost:5000")
               .AllowAnyMethod()
               .AllowAnyHeader()
-              .AllowCredentials();
+              .AllowCredentials()
+              .WithExposedHeaders("*");
     });
 });
 
@@ -195,10 +196,10 @@ if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName.Equals("A
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
-
-// Enable CORS
+// Enable CORS before other middleware
 app.UseCors("AllowFrontend");
+
+app.UseHttpsRedirection();
 
 // Enable IP Rate Limiting (must be before Authentication)
 app.UseIpRateLimiting();

@@ -3,6 +3,8 @@ import RegistrationFlow from './components/RegistrationFlow'
 import Dashboard from './components/Dashboard'
 import Login from './components/Login'
 import ProtectedRoute from './components/ProtectedRoute'
+import MealPlanCreator from './components/MealPlanCreator'
+import MealPlanDetails from './components/MealPlanDetails'
 import { tokenManager } from './services/api'
 
 function LoginPage() {
@@ -50,6 +52,23 @@ function App() {
           <Route 
             path="/dashboard/:userId" 
             element={<Navigate to="/dashboard" replace />}
+          />
+          {/* Meal Plan Routes */}
+          <Route 
+            path="/meal-plan/create" 
+            element={
+              <ProtectedRoute>
+                <MealPlanCreator />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/meal-plan/:mealPlanId" 
+            element={
+              <ProtectedRoute>
+                <MealPlanDetails />
+              </ProtectedRoute>
+            } 
           />
         </Routes>
       </div>

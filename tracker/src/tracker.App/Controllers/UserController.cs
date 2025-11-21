@@ -57,15 +57,13 @@ public class UserController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
-        // Lookup userId by email
         var userId = await _emailLookupService.GetUserIdByEmailAsync(request.Email);
         
         if (string.IsNullOrEmpty(userId))
         {
             return Unauthorized(new { message = "Invalid credentials" });
         }
-
-        // Authenticate with the userId
+        
         var result = await _userActor.Ask<UserCommandResponse>(
             new AuthenticateCommand(userId, request.Password),
             TimeSpan.FromSeconds(5));
@@ -74,14 +72,11 @@ public class UserController : ControllerBase
         {
             return Unauthorized(new { message = "Invalid credentials" });
         }
-
-        // Fetch user details to generate token with proper claims
+        
         var user = await _userActor.Ask<User>(new FetchUser(userId), TimeSpan.FromSeconds(5));
         
-        // Generate JWT access token
         var accessToken = _jwtService.GenerateToken(user.UserId, user.Email, user.Name);
         
-        // Generate refresh token
         var refreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(user.UserId);
 
         return Ok(new 
@@ -99,26 +94,21 @@ public class UserController : ControllerBase
     [HttpPost("refresh-token")]
     public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
     {
-        // Validate refresh token
         if (!await _refreshTokenService.IsValidRefreshTokenAsync(request.RefreshToken))
         {
             return Unauthorized(new { message = "Invalid or expired refresh token" });
         }
-
-        // Get the refresh token details
+        
         var refreshToken = await _refreshTokenService.GetRefreshTokenAsync(request.RefreshToken);
         if (refreshToken == null)
         {
             return Unauthorized(new { message = "Refresh token not found" });
         }
-
-        // Fetch user details
+        
         var user = await _userActor.Ask<User>(new FetchUser(refreshToken.UserId), TimeSpan.FromSeconds(5));
         
-        // Generate new access token
         var newAccessToken = _jwtService.GenerateToken(user.UserId, user.Email, user.Name);
         
-        // Generate new refresh token and revoke the old one
         var newRefreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(user.UserId);
         await _refreshTokenService.RevokeRefreshTokenAsync(request.RefreshToken, newRefreshToken.Token);
 
@@ -147,13 +137,10 @@ public class UserController : ControllerBase
             return BadRequest(new { message = "Email already registered" });
         }
 
-        // Generate a unique userId (UUID)
         var userId = Guid.NewGuid().ToString();
         
-        // Store email -> userId mapping
         await _emailLookupService.StoreEmailMappingAsync(request.Email, userId);
-
-        // Create the user
+        
         var createResult = await _userActor.Ask<UserCommandResponse>(
             new CreateUserCommand(userId, request.Name, request.Email),
             TimeSpan.FromSeconds(5));
@@ -162,8 +149,7 @@ public class UserController : ControllerBase
         {
             return BadRequest(createResult.ErrorMessage);
         }
-
-        // Set the password if provided
+        
         if (!string.IsNullOrEmpty(request.Password))
         {
             var passwordResult = await _userActor.Ask<UserCommandResponse>(
@@ -175,8 +161,7 @@ public class UserController : ControllerBase
                 return BadRequest(passwordResult.ErrorMessage);
             }
         }
-
-        // Generate JWT tokens to auto-login the user after registration
+        
         var accessToken = _jwtService.GenerateToken(userId, request.Email, request.Name);
         var refreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(userId);
 
@@ -195,17 +180,13 @@ public class UserController : ControllerBase
     [HttpPost("{userId}")]
     public async Task<IActionResult> Post(string userId, [FromBody] CreateUserRequest request)
     {
-        // Legacy endpoint - still supported for backward compatibility
-        // Check if email already exists
         if (await _emailLookupService.EmailExistsAsync(request.Email))
         {
             return BadRequest(new { message = "Email already registered" });
         }
 
-        // Store email -> userId mapping
         await _emailLookupService.StoreEmailMappingAsync(request.Email, userId);
-
-        // First create the user
+        
         var createResult = await _userActor.Ask<UserCommandResponse>(
             new CreateUserCommand(userId, request.Name, request.Email),
             TimeSpan.FromSeconds(5));
@@ -257,14 +238,11 @@ public class UserController : ControllerBase
         {
             return Unauthorized(new { message = result.ErrorMessage });
         }
-
-        // Fetch user details to generate token with proper claims
-        var user = await _userActor.Ask<User>(new FetchUser(userId), TimeSpan.FromSeconds(5));
         
-        // Generate JWT access token
+        var user = await _userActor.Ask<User>(new FetchUser(userId), TimeSpan.FromSeconds(5));
+
         var token = _jwtService.GenerateToken(userId, user.Email, user.Name);
         
-        // Generate refresh token
         var refreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(userId);
 
         return Ok(new 

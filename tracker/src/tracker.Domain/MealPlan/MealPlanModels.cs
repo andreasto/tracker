@@ -1,25 +1,31 @@
 namespace tracker.Domain.MealPlan;
 
-public record MealPlan(
-    int MealPlanId,
-    string UserId,
-    string PlanName,
-    DateTime StartDate,
-    DateTime? EndDate,
-    double TotalCalories,
-    DateTime CreatedAt);
+public record MealPlan
+{
+    public int MealPlanId { get; init; }
+    public string UserId { get; init; } = string.Empty;
+    public string PlanName { get; init; } = string.Empty;
+    public DateTime StartDate { get; init; }
+    public DateTime? EndDate { get; init; }
+    public double TotalCalories { get; init; }
+    public DateTime CreatedAt { get; init; }
+}
 
-public record MealPlanDay(
-    int DayId,
-    int MealPlanId,
-    DateTime PlanDate,
-    double DayTotalCalories);
+public record MealPlanDay
+{
+    public int DayId { get; init; }
+    public int MealPlanId { get; init; }
+    public DateTime PlanDate { get; init; }
+    public double DayTotalCalories { get; init; }
+}
 
-public record MealPlanMeal(
-    int MealId,
-    int DayId,
-    string MealType,
-    double CalorieTarget);
+public record MealPlanMeal
+{
+    public int MealId { get; init; }
+    public int DayId { get; init; }
+    public string MealType { get; init; } = string.Empty;
+    public double CalorieTarget { get; init; }
+}
 
 public record MealTypeDistribution(
     string MealType,
@@ -28,31 +34,31 @@ public record MealTypeDistribution(
 public static class MealPlanDefaults
 {
     // Default meal distribution percentages
-    public static readonly Dictionary<string, double> ThreeMealDistribution = new()
+    public static readonly List<MealTypeDistribution> ThreeMealDistribution = new()
     {
-        { "breakfast", 0.30 },  // 30%
-        { "lunch", 0.40 },      // 40%
-        { "dinner", 0.30 }      // 30%
+        new MealTypeDistribution("breakfast", 0.30),  // 30%
+        new MealTypeDistribution("lunch", 0.40),      // 40%
+        new MealTypeDistribution("dinner", 0.30)      // 30%
     };
 
-    public static readonly Dictionary<string, double> FourMealDistribution = new()
+    public static readonly List<MealTypeDistribution> FourMealDistribution = new()
     {
-        { "breakfast", 0.25 },  // 25%
-        { "lunch", 0.35 },      // 35%
-        { "snack", 0.10 },      // 10%
-        { "dinner", 0.30 }      // 30%
+        new MealTypeDistribution("breakfast", 0.25),  // 25%
+        new MealTypeDistribution("lunch", 0.35),      // 35%
+        new MealTypeDistribution("snack", 0.10),      // 10%
+        new MealTypeDistribution("dinner", 0.30)      // 30%
     };
 
-    public static readonly Dictionary<string, double> FiveMealDistribution = new()
+    public static readonly List<MealTypeDistribution> FiveMealDistribution = new()
     {
-        { "breakfast", 0.25 },  // 25%
-        { "snack", 0.10 },      // 10% (morning snack)
-        { "lunch", 0.30 },      // 30%
-        { "snack", 0.10 },      // 10% (afternoon snack)
-        { "dinner", 0.25 }      // 25%
+        new MealTypeDistribution("breakfast", 0.25),  // 25%
+        new MealTypeDistribution("snack", 0.10),      // 10% (morning snack)
+        new MealTypeDistribution("lunch", 0.30),      // 30%
+        new MealTypeDistribution("snack", 0.10),      // 10% (afternoon snack)
+        new MealTypeDistribution("dinner", 0.25)      // 25%
     };
 
-    public static Dictionary<string, double> GetDistribution(int mealsPerDay)
+    public static List<MealTypeDistribution> GetDistribution(int mealsPerDay)
     {
         return mealsPerDay switch
         {
