@@ -15,7 +15,10 @@ public record User(
     double? StartWeight = null,
     Dictionary<string, double>? StartMeasurements = null,
     double? BmrBase = null,
-    double? BmrWithActivityLevel = null)
+    double? BmrWithActivityLevel = null,
+    string? HashedPassword = null,
+    bool IsAuthenticated = false,
+    DateTime? LastAuthenticatedAt = null)
 {
 }
 
@@ -107,70 +110,111 @@ public static class UserExtensions
     {
         return command switch
         {
-            CreateUserCommand create when !user.IsCreated => new UserCommandResponse(user.UserId, true,
-                new UserCreated(create.UserId, create.Name, create.Email)),
-            CreateUserCommand _ when user.IsCreated => new UserCommandResponse(user.UserId, false,
-                ErrorMessage: "User already exists"),
-            UpdateUserNameCommand updateName when user.IsCreated => new UserCommandResponse(user.UserId, true,
-                new UserNameUpdated(updateName.UserId, updateName.Name)),
-            UpdateUserNameCommand _ when !user.IsCreated => new UserCommandResponse(user.UserId, false,
-                ErrorMessage: "User does not exist"),
-            UpdateUserEmailCommand updateEmail when user.IsCreated => new UserCommandResponse(user.UserId, true,
-                new UserEmailUpdated(updateEmail.UserId, updateEmail.Email)),
-            UpdateUserEmailCommand _ when !user.IsCreated => new UserCommandResponse(user.UserId, false,
-                ErrorMessage: "User does not exist"),
-            
-            // Onboarding flow commands
-            AnswerQuestionnaireCommand answerQuestionnaire when user.OnboardingState == UserOnboardingState.Registered =>
-                new UserCommandResponse(user.UserId, true, new QuestionnaireAnswered(answerQuestionnaire.UserId, answerQuestionnaire.Answers)),
-            AnswerQuestionnaireCommand _ when user.OnboardingState != UserOnboardingState.Registered =>
-                new UserCommandResponse(user.UserId, false, ErrorMessage: $"Cannot answer questionnaire in state: {user.OnboardingState}"),
-            
-            ProvideStartValuesCommand provideValues when user.OnboardingState == UserOnboardingState.QuestionnaireAnswered =>
-                new UserCommandResponse(user.UserId, true, 
-                    new StartValuesProvided(provideValues.UserId, provideValues.StartWeight, provideValues.Measurements)),
-            ProvideStartValuesCommand _ when user.OnboardingState != UserOnboardingState.QuestionnaireAnswered =>
-                new UserCommandResponse(user.UserId, false, ErrorMessage: $"Cannot provide start values in state: {user.OnboardingState}"),
-            
-            CompleteOnboardingCommand complete when user.OnboardingState == UserOnboardingState.StartValuesProvided =>
-                CompleteOnboardingWithBmr(user, complete),
-            CompleteOnboardingCommand _ when user.OnboardingState != UserOnboardingState.StartValuesProvided =>
-                new UserCommandResponse(user.UserId, false, ErrorMessage: $"Cannot complete onboarding in state: {user.OnboardingState}"),
-            
-            _ => throw new InvalidOperationException($"Unknown command type: {command.GetType().Name}")
+            SetPasswordCommand setPassword => new UserCommandResponse(user.UserId, true,
+            new PasswordSetEvent(setPassword.UserId, AuthenticationHelpers.HashPassword(setPassword.Password), DateTime.UtcNow)),
+
+        AuthenticateCommand authenticate => ValidateAuthentication(user, authenticate),
+
+        CreateUserCommand create when !user.IsCreated => new UserCommandResponse(user.UserId, true,
+            new UserCreated(create.UserId, create.Name, create.Email)),
+        CreateUserCommand _ when user.IsCreated => new UserCommandResponse(user.UserId, false,
+            ErrorMessage: "User already exists"),
+        
+        UpdateUserNameCommand updateName when user.IsCreated => new UserCommandResponse(user.UserId, true,
+            new UserNameUpdated(updateName.UserId, updateName.Name)),
+        UpdateUserNameCommand _ when !user.IsCreated => new UserCommandResponse(user.UserId, false,
+            ErrorMessage: "User does not exist"),
+        
+        UpdateUserEmailCommand updateEmail when user.IsCreated => new UserCommandResponse(user.UserId, true,
+            new UserEmailUpdated(updateEmail.UserId, updateEmail.Email)),
+        UpdateUserEmailCommand _ when !user.IsCreated => new UserCommandResponse(user.UserId, false,
+            ErrorMessage: "User does not exist"),
+
+        AnswerQuestionnaireCommand answerQuestionnaire when user.OnboardingState == UserOnboardingState.Registered =>
+            new UserCommandResponse(user.UserId, true, new QuestionnaireAnswered(answerQuestionnaire.UserId, answerQuestionnaire.Answers)),
+        AnswerQuestionnaireCommand _ when user.OnboardingState != UserOnboardingState.Registered =>
+            new UserCommandResponse(user.UserId, false, ErrorMessage: $"Cannot answer questionnaire in state: {user.OnboardingState}"),
+
+        ProvideStartValuesCommand provideValues when user.OnboardingState == UserOnboardingState.QuestionnaireAnswered =>
+            new UserCommandResponse(user.UserId, true,
+                new StartValuesProvided(provideValues.UserId, provideValues.StartWeight, provideValues.Measurements)),
+        ProvideStartValuesCommand _ when user.OnboardingState != UserOnboardingState.QuestionnaireAnswered =>
+            new UserCommandResponse(user.UserId, false, ErrorMessage: $"Cannot provide start values in state: {user.OnboardingState}"),
+
+        CompleteOnboardingCommand complete when user.OnboardingState == UserOnboardingState.StartValuesProvided =>
+            CompleteOnboardingWithBmr(user, complete),
+        CompleteOnboardingCommand _ when user.OnboardingState != UserOnboardingState.StartValuesProvided =>
+            new UserCommandResponse(user.UserId, false, ErrorMessage: $"Cannot complete onboarding in state: {user.OnboardingState}"),
+
+        _ => throw new InvalidOperationException($"Unknown command type: {command.GetType().Name}")
         };
+    }
+    
+    private static UserCommandResponse ValidateAuthentication(User user, AuthenticateCommand authenticate)
+    {
+        if (string.IsNullOrEmpty(user.HashedPassword))
+        {
+            return new UserCommandResponse(user.UserId, false, null, "No password set");
+        }
+
+        var isSuccess = AuthenticationHelpers.VerifyPassword(authenticate.Password, user.HashedPassword);
+
+        return new UserCommandResponse(user.UserId, isSuccess,
+            new AuthenticationAttemptedEvent(authenticate.UserId, isSuccess, DateTime.UtcNow),
+            isSuccess ? null : "Invalid password");
     }
 
     public static User ApplyEvent(this User user, IUserEvent @event)
     {
         return @event switch
         {
-            UserCreated created => user with 
-            { 
-                Name = created.Name, 
-                Email = created.Email, 
+            PasswordSetEvent passwordSet => user with
+            {
+                HashedPassword = passwordSet.HashedPassword,
+                IsAuthenticated = true,
+                LastAuthenticatedAt = passwordSet.SetAt
+            },
+
+            AuthenticationAttemptedEvent authAttempt when authAttempt.Success => user with
+            {
+                IsAuthenticated = true,
+                LastAuthenticatedAt = authAttempt.AttemptedAt
+            },
+
+            AuthenticationAttemptedEvent => user,
+
+            UserCreated created => user with
+            {
+                Name = created.Name,
+                Email = created.Email,
                 IsCreated = true,
                 OnboardingState = UserOnboardingState.Registered
             },
+        
             UserNameUpdated nameUpdated => user with { Name = nameUpdated.Name },
+        
             UserEmailUpdated emailUpdated => user with { Email = emailUpdated.Email },
-            QuestionnaireAnswered answered => user with 
-            { 
+        
+            QuestionnaireAnswered answered => user with
+            {
                 QuestionnaireAnswers = answered.Answers,
                 OnboardingState = UserOnboardingState.QuestionnaireAnswered
             },
-            StartValuesProvided provided => user with 
-            { 
+        
+            StartValuesProvided provided => user with
+            {
                 StartWeight = provided.StartWeight,
                 StartMeasurements = provided.Measurements,
                 OnboardingState = UserOnboardingState.StartValuesProvided
             },
-            UserOnboardingCompleted completed => user with 
-            { 
+        
+            UserOnboardingCompleted completed => user with
+            {
                 OnboardingState = UserOnboardingState.Complete,
                 BmrBase = completed.BmrBase,
                 BmrWithActivityLevel = completed.BmrWithActivityLevel
             },
+
             _ => throw new InvalidOperationException($"Unknown event type: {@event.GetType().Name}")
         };
     }
@@ -249,6 +293,18 @@ public sealed class UserActor : ReceivePersistentActor
             HandleCommandResponse(response, () => Become(RegisteredBehavior));
         });
         
+        Command<SetPasswordCommand>(cmd =>
+        {
+            Sender.Tell(new UserCommandResponse(_user.UserId, false, 
+                ErrorMessage: "User must be created first"));
+        });
+        
+        Command<AuthenticateCommand>(cmd =>
+        {
+            Sender.Tell(new UserCommandResponse(_user.UserId, false, 
+                ErrorMessage: "User must be created first"));
+        });
+        
         Command<IUserCommand>(cmd =>
         {
             Sender.Tell(new UserCommandResponse(_user.UserId, false, 
@@ -269,6 +325,8 @@ public sealed class UserActor : ReceivePersistentActor
         
         Command<UpdateUserNameCommand>(HandleStandardCommand);
         Command<UpdateUserEmailCommand>(HandleStandardCommand);
+        Command<SetPasswordCommand>(HandleStandardCommand);
+        Command<AuthenticateCommand>(HandleStandardCommand);
         
         Command<IUserCommand>(cmd =>
         {
@@ -290,6 +348,8 @@ public sealed class UserActor : ReceivePersistentActor
         
         Command<UpdateUserNameCommand>(HandleStandardCommand);
         Command<UpdateUserEmailCommand>(HandleStandardCommand);
+        Command<SetPasswordCommand>(HandleStandardCommand);
+        Command<AuthenticateCommand>(HandleStandardCommand);
         
         Command<IUserCommand>(cmd =>
         {
@@ -311,6 +371,8 @@ public sealed class UserActor : ReceivePersistentActor
         
         Command<UpdateUserNameCommand>(HandleStandardCommand);
         Command<UpdateUserEmailCommand>(HandleStandardCommand);
+        Command<SetPasswordCommand>(HandleStandardCommand);
+        Command<AuthenticateCommand>(HandleStandardCommand);
         
         Command<IUserCommand>(cmd =>
         {
@@ -326,6 +388,8 @@ public sealed class UserActor : ReceivePersistentActor
         
         Command<UpdateUserNameCommand>(HandleStandardCommand);
         Command<UpdateUserEmailCommand>(HandleStandardCommand);
+        Command<SetPasswordCommand>(HandleStandardCommand);
+        Command<AuthenticateCommand>(HandleStandardCommand);
         
         Command<IUserCommand>(cmd =>
         {

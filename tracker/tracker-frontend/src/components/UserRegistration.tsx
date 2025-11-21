@@ -9,19 +9,38 @@ export default function UserRegistration({ onUserCreated }: UserRegistrationProp
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [userId, setUserId] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
+
+    // Validate password match
+    if (password && password !== confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+
+    // Validate password strength
+    if (password && password.length < 8) {
+      setError('Password must be at least 8 characters long')
+      return
+    }
+
     setLoading(true)
 
     try {
       // Generate a simple userId from email
       const generatedUserId = userId || email.split('@')[0] + '-' + Date.now()
       
-      await api.createUser(generatedUserId, { name, email })
+      await api.createUser(generatedUserId, { 
+        name, 
+        email, 
+        password: password || undefined 
+      })
       onUserCreated(generatedUserId)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create user')
@@ -87,6 +106,39 @@ export default function UserRegistration({ onUserCreated }: UserRegistrationProp
           />
         </div>
 
+        <div>
+          <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            Password
+          </label>
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter a secure password"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            Optional but recommended. Minimum 8 characters.
+          </p>
+        </div>
+
+        {password && (
+          <div>
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+              Confirm Password
+            </label>
+            <input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter your password"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        )}
+
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
             {error}
@@ -101,6 +153,15 @@ export default function UserRegistration({ onUserCreated }: UserRegistrationProp
           {loading ? 'Creating Account...' : 'Create Account'}
         </button>
       </form>
+
+      <div className="mt-6 text-center">
+        <p className="text-sm text-gray-600">
+          Already have an account?{' '}
+          <a href="/login" className="text-blue-600 hover:text-blue-700 font-medium">
+            Sign in here
+          </a>
+        </p>
+      </div>
     </div>
   )
 }

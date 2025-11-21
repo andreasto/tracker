@@ -7,6 +7,14 @@ public interface IUserCommand : IWithUserId
 {
 }
 
+public record SetPasswordCommand(string UserId, string Password) : IUserCommand;
+
+public record AuthenticateCommand(string UserId, string Password) : IUserCommand;
+
+public record PasswordSetEvent(string UserId, string HashedPassword, DateTime SetAt) : IUserEvent;
+
+public record AuthenticationAttemptedEvent(string UserId, bool Success, DateTime AttemptedAt) : IUserEvent;
+
 public sealed record CreateUserCommand(string UserId, string Name, string Email) : IUserCommand;
 
 public sealed record UpdateUserNameCommand(string UserId, string Name) : IUserCommand;

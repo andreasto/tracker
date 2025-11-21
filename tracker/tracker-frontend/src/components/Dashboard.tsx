@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { api, User, CheckInState, SubmitCheckInRequest } from '../services/api'
 import ProgressChart from './ProgressChart'
 import CheckInForm from './CheckInForm'
+import CheckInList from './CheckInList'
 
 export default function Dashboard() {
   const { userId } = useParams<{ userId: string }>()
@@ -87,6 +88,18 @@ export default function Dashboard() {
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Progress Tracking</h2>
               <ProgressChart
+                checkIns={checkIns.checkInHistory || []}
+                startWeight={user.startWeight}
+                startMeasurements={user.measurements}
+              />
+            </div>
+          )}
+
+          {/* Check-In History List */}
+          {checkIns && (
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Check-In History</h2>
+              <CheckInList
                 checkIns={checkIns.checkInHistory || []}
                 startWeight={user.startWeight}
                 startMeasurements={user.measurements}

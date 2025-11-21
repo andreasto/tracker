@@ -16,6 +16,7 @@ export interface User {
 export interface CreateUserRequest {
   name: string
   email: string
+  password?: string
 }
 
 export interface AnswerQuestionnaireRequest {
@@ -184,6 +185,38 @@ export const api = {
       const error = await response.text()
       throw new Error(error || 'Failed to set check-in day')
     }
+  },
+
+  async setPassphrase(userId: string, passphrase: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/user/${userId}/passphrase`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ passphrase }),
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(error || 'Failed to set passphrase')
+    }
+  },
+
+  async authenticate(userId: string, password: string): Promise<{ authenticated: boolean; userId: string }> {
+    const response = await fetch(`${API_BASE_URL}/user/${userId}/authenticate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ password }),
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(error || 'Authentication failed')
+    }
+
+    return response.json()
   },
 }
 

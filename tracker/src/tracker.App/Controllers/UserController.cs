@@ -29,8 +29,37 @@ public class UserController : ControllerBase
     [HttpPost("{userId}")]
     public async Task<IActionResult> Post(string userId, [FromBody] CreateUserRequest request)
     {
-        var result = await _userActor.Ask<UserCommandResponse>(
+        // First create the user
+        var createResult = await _userActor.Ask<UserCommandResponse>(
             new CreateUserCommand(userId, request.Name, request.Email),
+            TimeSpan.FromSeconds(5));
+        
+        if (!createResult.IsSuccess)
+        {
+            return BadRequest(createResult.ErrorMessage);
+        }
+
+        // Then set the password if provided
+        if (!string.IsNullOrEmpty(request.Password))
+        {
+            var passwordResult = await _userActor.Ask<UserCommandResponse>(
+                new SetPasswordCommand(userId, request.Password),
+                TimeSpan.FromSeconds(5));
+            
+            if (!passwordResult.IsSuccess)
+            {
+                return BadRequest(passwordResult.ErrorMessage);
+            }
+        }
+
+        return Ok(createResult.Event);
+    }
+
+    [HttpPost("{userId}/password")]
+    public async Task<IActionResult> SetPassword(string userId, [FromBody] SetPasswordRequest request)
+    {
+        var result = await _userActor.Ask<UserCommandResponse>(
+            new SetPasswordCommand(userId, request.Password),
             TimeSpan.FromSeconds(5));
         
         if (!result.IsSuccess)
@@ -39,6 +68,21 @@ public class UserController : ControllerBase
         }
 
         return Ok(result.Event);
+    }
+
+    [HttpPost("{userId}/authenticate")]
+    public async Task<IActionResult> Authenticate(string userId, [FromBody] AuthenticateRequest request)
+    {
+        var result = await _userActor.Ask<UserCommandResponse>(
+            new AuthenticateCommand(userId, request.Password),
+            TimeSpan.FromSeconds(5));
+        
+        if (!result.IsSuccess)
+        {
+            return Unauthorized(new { message = result.ErrorMessage });
+        }
+
+        return Ok(new { authenticated = true, userId });
     }
 
     [HttpPut("{userId}/name")]
@@ -117,10 +161,12 @@ public class UserController : ControllerBase
     }
 }
 
-public record CreateUserRequest(string Name, string Email);
+public record CreateUserRequest(string Name, string Email, string? Password = null);
 public record UpdateNameRequest(string Name);
 public record UpdateEmailRequest(string Email);
 public record AnswerQuestionnaireRequest(Dictionary<string, string> Answers);
 public record ProvideStartValuesRequest(double StartWeight, Dictionary<string, double> Measurements);
+public record SetPasswordRequest(string Password);
+public record AuthenticateRequest(string Password);
 
 
