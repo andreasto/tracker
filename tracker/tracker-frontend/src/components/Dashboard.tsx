@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { api, User, CheckInState, SubmitCheckInRequest } from '../services/api'
 import ProgressChart from './ProgressChart'
 import CheckInForm from './CheckInForm'
@@ -7,6 +7,7 @@ import CheckInList from './CheckInList'
 
 export default function Dashboard() {
   const { userId } = useParams<{ userId: string }>()
+  const navigate = useNavigate()
   const [user, setUser] = useState<User | null>(null)
   const [checkIns, setCheckIns] = useState<CheckInState | null>(null)
   const [loading, setLoading] = useState(true)
@@ -15,34 +16,48 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!userId) return
-
       try {
-        const [userData, checkInData] = await Promise.all([
-          api.getUser(userId),
-          api.getCheckIns(userId),
-        ])
+        // First get current user (uses /me endpoint which is authenticated)
+        const userData = await api.getCurrentUser()
         setUser(userData)
+        
+        // Then get check-ins for that user
+        const checkInData = await api.getCheckIns(userData.userId)
         setCheckIns(checkInData)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load data')
+        // If authentication fails, redirect to login
+        if (err instanceof Error && err.message.includes('Authentication required')) {
+          navigate('/login')
+        }
       } finally {
         setLoading(false)
       }
     }
 
     fetchData()
-  }, [userId])
+  }, [navigate])
 
   const handleSubmitCheckIn = async (checkInData: SubmitCheckInRequest) => {
-    if (!userId) return
+    if (!user) return
 
-    await api.submitCheckIn(userId, checkInData)
+    await api.submitCheckIn(user.userId, checkInData)
     
     // Refresh check-in data
-    const updatedCheckIns = await api.getCheckIns(userId)
+    const updatedCheckIns = await api.getCheckIns(user.userId)
     setCheckIns(updatedCheckIns)
     setShowCheckInForm(false)
+  }
+
+  const handleLogout = async () => {
+    try {
+      await api.logout()
+      navigate('/login')
+    } catch (error) {
+      console.error('Logout error:', error)
+      // Still redirect to login even if logout API call fails
+      navigate('/login')
+    }
   }
 
   if (loading) {
@@ -75,12 +90,20 @@ export default function Dashboard() {
               <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
               <p className="mt-1 text-sm text-gray-500">Welcome back, {user.name}!</p>
             </div>
-            <button
-              onClick={() => setShowCheckInForm(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
-            >
-              📊 New Check-In
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCheckInForm(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
+              >
+                📊 New Check-In
+              </button>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 font-medium"
+              >
+                🚪 Logout
+              </button>
+            </div>
           </div>
 
           {/* Progress Chart */}
@@ -128,7 +151,7 @@ export default function Dashboard() {
                   <dt className="text-sm font-medium text-gray-500">Status</dt>
                   <dd className="text-sm">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      {user.onboardingState}
+                      {user.onboardingState == '4' ? '✅ Onboarding Completed' : '🚀 Onboarding In Progress'}
                     </span>
                   </dd>
                 </div>

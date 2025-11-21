@@ -1,7 +1,9 @@
 using Akka.Actor;
 using Akka.Hosting;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using tracker.App.Actors;
+using tracker.App.Services;
 using tracker.Domain.User;
 
 namespace tracker.App.Controllers;
@@ -12,23 +14,197 @@ public class UserController : ControllerBase
 {
     private readonly ILogger<UserController> _logger;
     private readonly IActorRef _userActor;
+    private readonly IJwtService _jwtService;
+    private readonly IRefreshTokenService _refreshTokenService;
+    private readonly IEmailLookupService _emailLookupService;
 
-    public UserController(ILogger<UserController> logger, IRequiredActor<UserActor> userActor)
+    public UserController(
+        ILogger<UserController> logger, 
+        IRequiredActor<UserActor> userActor, 
+        IJwtService jwtService,
+        IRefreshTokenService refreshTokenService,
+        IEmailLookupService emailLookupService)
     {
         _logger = logger;
         _userActor = userActor.ActorRef;
+        _jwtService = jwtService;
+        _refreshTokenService = refreshTokenService;
+        _emailLookupService = emailLookupService;
+    }
+
+    [HttpGet("me")]
+    [Authorize]
+    public async Task<IActionResult> GetCurrentUser()
+    {
+        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Unauthorized();
+        }
+
+        var user = await _userActor.Ask<User>(new FetchUser(userId), TimeSpan.FromSeconds(5));
+        return Ok(user);
     }
 
     [HttpGet("{userId}")]
+    [Authorize]
     public async Task<User> Get(string userId)
     {
         var user = await _userActor.Ask<User>(new FetchUser(userId), TimeSpan.FromSeconds(5));
         return user;
     }
+    
+    [HttpPost("login")]
+    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    {
+        // Lookup userId by email
+        var userId = await _emailLookupService.GetUserIdByEmailAsync(request.Email);
+        
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Unauthorized(new { message = "Invalid credentials" });
+        }
+
+        // Authenticate with the userId
+        var result = await _userActor.Ask<UserCommandResponse>(
+            new AuthenticateCommand(userId, request.Password),
+            TimeSpan.FromSeconds(5));
+        
+        if (!result.IsSuccess)
+        {
+            return Unauthorized(new { message = "Invalid credentials" });
+        }
+
+        // Fetch user details to generate token with proper claims
+        var user = await _userActor.Ask<User>(new FetchUser(userId), TimeSpan.FromSeconds(5));
+        
+        // Generate JWT access token
+        var accessToken = _jwtService.GenerateToken(user.UserId, user.Email, user.Name);
+        
+        // Generate refresh token
+        var refreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(user.UserId);
+
+        return Ok(new 
+        { 
+            authenticated = true, 
+            userId = user.UserId,
+            email = user.Email,
+            name = user.Name,
+            accessToken,
+            refreshToken = refreshToken.Token,
+            expiresIn = int.Parse(HttpContext.RequestServices.GetRequiredService<IConfiguration>()["Jwt:ExpiryInMinutes"] ?? "15") * 60 // in seconds
+        });
+    }
+    
+    [HttpPost("refresh-token")]
+    public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
+    {
+        // Validate refresh token
+        if (!await _refreshTokenService.IsValidRefreshTokenAsync(request.RefreshToken))
+        {
+            return Unauthorized(new { message = "Invalid or expired refresh token" });
+        }
+
+        // Get the refresh token details
+        var refreshToken = await _refreshTokenService.GetRefreshTokenAsync(request.RefreshToken);
+        if (refreshToken == null)
+        {
+            return Unauthorized(new { message = "Refresh token not found" });
+        }
+
+        // Fetch user details
+        var user = await _userActor.Ask<User>(new FetchUser(refreshToken.UserId), TimeSpan.FromSeconds(5));
+        
+        // Generate new access token
+        var newAccessToken = _jwtService.GenerateToken(user.UserId, user.Email, user.Name);
+        
+        // Generate new refresh token and revoke the old one
+        var newRefreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(user.UserId);
+        await _refreshTokenService.RevokeRefreshTokenAsync(request.RefreshToken, newRefreshToken.Token);
+
+        return Ok(new 
+        { 
+            accessToken = newAccessToken,
+            refreshToken = newRefreshToken.Token,
+            expiresIn = int.Parse(HttpContext.RequestServices.GetRequiredService<IConfiguration>()["Jwt:ExpiryInMinutes"] ?? "15") * 60 // in seconds
+        });
+    }
+    
+    [HttpPost("revoke-token")]
+    [Authorize]
+    public async Task<IActionResult> RevokeToken([FromBody] RevokeTokenRequest request)
+    {
+        await _refreshTokenService.RevokeRefreshTokenAsync(request.RefreshToken);
+        return Ok(new { message = "Token revoked successfully" });
+    }
+
+    [HttpPost("register")]
+    public async Task<IActionResult> Register([FromBody] CreateUserRequest request)
+    {
+        // Check if email already exists
+        if (await _emailLookupService.EmailExistsAsync(request.Email))
+        {
+            return BadRequest(new { message = "Email already registered" });
+        }
+
+        // Generate a unique userId (UUID)
+        var userId = Guid.NewGuid().ToString();
+        
+        // Store email -> userId mapping
+        await _emailLookupService.StoreEmailMappingAsync(request.Email, userId);
+
+        // Create the user
+        var createResult = await _userActor.Ask<UserCommandResponse>(
+            new CreateUserCommand(userId, request.Name, request.Email),
+            TimeSpan.FromSeconds(5));
+        
+        if (!createResult.IsSuccess)
+        {
+            return BadRequest(createResult.ErrorMessage);
+        }
+
+        // Set the password if provided
+        if (!string.IsNullOrEmpty(request.Password))
+        {
+            var passwordResult = await _userActor.Ask<UserCommandResponse>(
+                new SetPasswordCommand(userId, request.Password),
+                TimeSpan.FromSeconds(5));
+            
+            if (!passwordResult.IsSuccess)
+            {
+                return BadRequest(passwordResult.ErrorMessage);
+            }
+        }
+
+        // Generate JWT tokens to auto-login the user after registration
+        var accessToken = _jwtService.GenerateToken(userId, request.Email, request.Name);
+        var refreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(userId);
+
+        return Ok(new 
+        { 
+            userId,
+            email = request.Email,
+            name = request.Name,
+            message = "User registered successfully",
+            accessToken,
+            refreshToken = refreshToken.Token,
+            expiresIn = int.Parse(HttpContext.RequestServices.GetRequiredService<IConfiguration>()["Jwt:ExpiryInMinutes"] ?? "15") * 60 // in seconds
+        });
+    }
 
     [HttpPost("{userId}")]
     public async Task<IActionResult> Post(string userId, [FromBody] CreateUserRequest request)
     {
+        // Legacy endpoint - still supported for backward compatibility
+        // Check if email already exists
+        if (await _emailLookupService.EmailExistsAsync(request.Email))
+        {
+            return BadRequest(new { message = "Email already registered" });
+        }
+
+        // Store email -> userId mapping
+        await _emailLookupService.StoreEmailMappingAsync(request.Email, userId);
+
         // First create the user
         var createResult = await _userActor.Ask<UserCommandResponse>(
             new CreateUserCommand(userId, request.Name, request.Email),
@@ -82,10 +258,27 @@ public class UserController : ControllerBase
             return Unauthorized(new { message = result.ErrorMessage });
         }
 
-        return Ok(new { authenticated = true, userId });
+        // Fetch user details to generate token with proper claims
+        var user = await _userActor.Ask<User>(new FetchUser(userId), TimeSpan.FromSeconds(5));
+        
+        // Generate JWT access token
+        var token = _jwtService.GenerateToken(userId, user.Email, user.Name);
+        
+        // Generate refresh token
+        var refreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(userId);
+
+        return Ok(new 
+        { 
+            authenticated = true, 
+            userId,
+            token,
+            refreshToken = refreshToken.Token,
+            expiresIn = int.Parse(HttpContext.RequestServices.GetRequiredService<IConfiguration>()["Jwt:ExpiryInMinutes"] ?? "15") * 60 // in seconds
+        });
     }
 
     [HttpPut("{userId}/name")]
+    [Authorize]
     public async Task<IActionResult> UpdateName(string userId, [FromBody] UpdateNameRequest request)
     {
         var result = await _userActor.Ask<UserCommandResponse>(
@@ -101,6 +294,7 @@ public class UserController : ControllerBase
     }
 
     [HttpPut("{userId}/email")]
+    [Authorize]
     public async Task<IActionResult> UpdateEmail(string userId, [FromBody] UpdateEmailRequest request)
     {
         var result = await _userActor.Ask<UserCommandResponse>(
@@ -116,6 +310,7 @@ public class UserController : ControllerBase
     }
 
     [HttpPost("{userId}/questionnaire")]
+    [Authorize]
     public async Task<IActionResult> AnswerQuestionnaire(string userId, [FromBody] AnswerQuestionnaireRequest request)
     {
         var result = await _userActor.Ask<UserCommandResponse>(
@@ -131,6 +326,7 @@ public class UserController : ControllerBase
     }
 
     [HttpPost("{userId}/start-values")]
+    [Authorize]
     public async Task<IActionResult> ProvideStartValues(string userId, [FromBody] ProvideStartValuesRequest request)
     {
         var result = await _userActor.Ask<UserCommandResponse>(
@@ -146,6 +342,7 @@ public class UserController : ControllerBase
     }
 
     [HttpPost("{userId}/complete-onboarding")]
+    [Authorize]
     public async Task<IActionResult> CompleteOnboarding(string userId)
     {
         var result = await _userActor.Ask<UserCommandResponse>(
@@ -168,5 +365,8 @@ public record AnswerQuestionnaireRequest(Dictionary<string, string> Answers);
 public record ProvideStartValuesRequest(double StartWeight, Dictionary<string, double> Measurements);
 public record SetPasswordRequest(string Password);
 public record AuthenticateRequest(string Password);
+public record LoginRequest(string Email, string Password);
+public record RefreshTokenRequest(string RefreshToken);
+public record RevokeTokenRequest(string RefreshToken);
 
 

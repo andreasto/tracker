@@ -35,6 +35,10 @@
         <PackageReference Include="FluentMigrator.Runner" />
         <PackageReference Include="FluentMigrator.Runner.Postgres" />
         <PackageReference Include="Dapper" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+        <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
+        <PackageReference Include="AspNetCoreRateLimit" />
+        <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
     </ItemGroup>
 
     <ItemGroup>

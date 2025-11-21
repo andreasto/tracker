@@ -1,6 +1,34 @@
 // API Configuration
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
+// Token Management
+const ACCESS_TOKEN_KEY = 'access_token'
+const REFRESH_TOKEN_KEY = 'refresh_token'
+
+export const tokenManager = {
+  getAccessToken(): string | null {
+    return localStorage.getItem(ACCESS_TOKEN_KEY)
+  },
+  
+  getRefreshToken(): string | null {
+    return localStorage.getItem(REFRESH_TOKEN_KEY)
+  },
+  
+  setTokens(accessToken: string, refreshToken: string): void {
+    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken)
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
+  },
+  
+  removeTokens(): void {
+    localStorage.removeItem(ACCESS_TOKEN_KEY)
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
+  },
+  
+  isAuthenticated(): boolean {
+    return !!this.getAccessToken()
+  }
+}
+
 export interface User {
   userId: string
   name: string
@@ -11,6 +39,35 @@ export interface User {
   measurements?: Record<string, number>
   bmrBase?: number
   bmrWithActivityLevel?: number
+}
+
+export interface LoginRequest {
+  email: string
+  password: string
+}
+
+export interface LoginResponse {
+  authenticated: boolean
+  userId: string
+  email: string
+  name: string
+  accessToken: string
+  refreshToken: string
+  expiresIn: number
+}
+
+export interface RefreshTokenResponse {
+  accessToken: string
+  refreshToken: string
+  expiresIn: number
+}
+
+export interface AuthenticateResponse {
+  authenticated: boolean
+  userId: string
+  token: string
+  refreshToken: string
+  expiresIn: number
 }
 
 export interface CreateUserRequest {
@@ -65,9 +122,192 @@ export interface SubmitCheckInRequest {
   overarm: number
 }
 
+// Helper function to get auth headers
+function getAuthHeaders(): HeadersInit {
+  const token = tokenManager.getAccessToken()
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  }
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  
+  return headers
+}
+
+// Helper function to handle token refresh on 401 errors
+async function refreshAccessToken(): Promise<boolean> {
+  const refreshToken = tokenManager.getRefreshToken()
+  
+  if (!refreshToken) {
+    return false
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/user/refresh-token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refreshToken }),
+    })
+
+    if (!response.ok) {
+      return false
+    }
+
+    const data: RefreshTokenResponse = await response.json()
+    tokenManager.setTokens(data.accessToken, data.refreshToken)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Helper function to make authenticated requests with automatic token refresh
+async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
+  // First attempt
+  let response = await fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      ...getAuthHeaders(),
+    },
+  })
+
+  // If 401, try to refresh token and retry
+  if (response.status === 401) {
+    const refreshed = await refreshAccessToken()
+    
+    if (refreshed) {
+      // Retry with new token
+      response = await fetch(url, {
+        ...options,
+        headers: {
+          ...options.headers,
+          ...getAuthHeaders(),
+        },
+      })
+    } else {
+      // Refresh failed, remove tokens
+      tokenManager.removeTokens()
+    }
+  }
+
+  return response
+}
+
 // API Service
 export const api = {
+  // Authentication
+  async login(request: LoginRequest): Promise<LoginResponse> {
+    const response = await fetch(`${API_BASE_URL}/user/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(error || 'Login failed')
+    }
+
+    const data: LoginResponse = await response.json()
+    
+    // Store tokens automatically on successful login
+    if (data.authenticated && data.accessToken && data.refreshToken) {
+      tokenManager.setTokens(data.accessToken, data.refreshToken)
+    }
+    
+    return data
+  },
+
+  async logout(): Promise<void> {
+    // Optionally revoke the refresh token on server
+    const refreshToken = tokenManager.getRefreshToken()
+    if (refreshToken) {
+      try {
+        await fetch(`${API_BASE_URL}/user/revoke-token`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ refreshToken }),
+        })
+      } catch {
+        // Ignore errors on logout
+      }
+    }
+    
+    tokenManager.removeTokens()
+  },
+  
+  async refreshToken(): Promise<RefreshTokenResponse> {
+    const refreshToken = tokenManager.getRefreshToken()
+    
+    if (!refreshToken) {
+      throw new Error('No refresh token available')
+    }
+
+    const response = await fetch(`${API_BASE_URL}/user/refresh-token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refreshToken }),
+    })
+
+    if (!response.ok) {
+      tokenManager.removeTokens()
+      throw new Error('Failed to refresh token')
+    }
+
+    const data: RefreshTokenResponse = await response.json()
+    tokenManager.setTokens(data.accessToken, data.refreshToken)
+    
+    return data
+  },
+
+  async getCurrentUser(): Promise<User> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/user/me`)
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Authentication required')
+      }
+      throw new Error('Failed to fetch current user')
+    }
+
+    return response.json()
+  },
+
+  async register(request: CreateUserRequest): Promise<{ userId: string; email: string; name: string; message: string; accessToken?: string; refreshToken?: string }> {
+    const response = await fetch(`${API_BASE_URL}/user/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(error || 'Failed to register user')
+    }
+
+    const data = await response.json()
+    
+    // Store tokens automatically on successful registration
+    if (data.accessToken && data.refreshToken) {
+      tokenManager.setTokens(data.accessToken, data.refreshToken)
+    }
+    
+    return data
+  },
+
   async createUser(userId: string, request: CreateUserRequest): Promise<User> {
+    // Legacy method - kept for backward compatibility
     const response = await fetch(`${API_BASE_URL}/user/${userId}`, {
       method: 'POST',
       headers: {
@@ -85,9 +325,12 @@ export const api = {
   },
 
   async getUser(userId: string): Promise<User> {
-    const response = await fetch(`${API_BASE_URL}/user/${userId}`)
+    const response = await fetchWithAuth(`${API_BASE_URL}/user/${userId}`)
 
     if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Authentication required')
+      }
       throw new Error('Failed to fetch user')
     }
 
@@ -98,11 +341,8 @@ export const api = {
     userId: string,
     request: AnswerQuestionnaireRequest
   ): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/user/${userId}/questionnaire`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/user/${userId}/questionnaire`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(request),
     })
 
@@ -116,11 +356,8 @@ export const api = {
     userId: string,
     request: ProvideStartValuesRequest
   ): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/user/${userId}/start-values`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/user/${userId}/start-values`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(request),
     })
 
@@ -131,11 +368,8 @@ export const api = {
   },
 
   async completeOnboarding(userId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/user/${userId}/complete-onboarding`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/user/${userId}/complete-onboarding`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
     })
 
     if (!response.ok) {
@@ -145,7 +379,7 @@ export const api = {
   },
 
   async getCheckIns(userId: string): Promise<CheckInState> {
-    const response = await fetch(`${API_BASE_URL}/checkin/${userId}`)
+    const response = await fetchWithAuth(`${API_BASE_URL}/checkin/${userId}`)
 
     if (!response.ok) {
       throw new Error('Failed to fetch check-ins')
@@ -158,11 +392,8 @@ export const api = {
     userId: string,
     request: SubmitCheckInRequest
   ): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/checkin/${userId}`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/checkin/${userId}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(request),
     })
 
@@ -173,11 +404,8 @@ export const api = {
   },
 
   async setCheckInDay(userId: string, checkInDay: number): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/checkin/${userId}/checkin-day`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/checkin/${userId}/checkin-day`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify({ checkInDay }),
     })
 
@@ -187,22 +415,22 @@ export const api = {
     }
   },
 
-  async setPassphrase(userId: string, passphrase: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/user/${userId}/passphrase`, {
+  async setPassword(userId: string, password: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/user/${userId}/password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ passphrase }),
+      body: JSON.stringify({ password }),
     })
 
     if (!response.ok) {
       const error = await response.text()
-      throw new Error(error || 'Failed to set passphrase')
+      throw new Error(error || 'Failed to set password')
     }
   },
 
-  async authenticate(userId: string, password: string): Promise<{ authenticated: boolean; userId: string }> {
+  async authenticate(userId: string, password: string): Promise<AuthenticateResponse> {
     const response = await fetch(`${API_BASE_URL}/user/${userId}/authenticate`, {
       method: 'POST',
       headers: {
@@ -216,7 +444,14 @@ export const api = {
       throw new Error(error || 'Authentication failed')
     }
 
-    return response.json()
+    const data: AuthenticateResponse = await response.json()
+    
+    // Store tokens automatically on successful authentication
+    if (data.authenticated && data.token && data.refreshToken) {
+      tokenManager.setTokens(data.token, data.refreshToken)
+    }
+    
+    return data
   },
 }
 

@@ -1,5 +1,6 @@
 using Akka.Actor;
 using Akka.Hosting;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using tracker.App.Actors;
 using tracker.Domain.CheckIn;
@@ -8,6 +9,7 @@ namespace tracker.App.Controllers;
 
 [ApiController]
 [Route("[controller]")]
+[Authorize]
 public class CheckInController : ControllerBase
 {
     private readonly ILogger<CheckInController> _logger;

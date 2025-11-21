@@ -8,7 +8,6 @@ interface UserRegistrationProps {
 export default function UserRegistration({ onUserCreated }: UserRegistrationProps) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [userId, setUserId] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -33,15 +32,15 @@ export default function UserRegistration({ onUserCreated }: UserRegistrationProp
     setLoading(true)
 
     try {
-      // Generate a simple userId from email
-      const generatedUserId = userId || email.split('@')[0] + '-' + Date.now()
-      
-      await api.createUser(generatedUserId, { 
+      // Use the new register endpoint which generates userId on the backend
+      const result = await api.register({ 
         name, 
         email, 
         password: password || undefined 
       })
-      onUserCreated(generatedUserId)
+      
+      // Pass the generated userId to the parent component
+      onUserCreated(result.userId)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create user')
     } finally {
@@ -59,22 +58,6 @@ export default function UserRegistration({ onUserCreated }: UserRegistrationProp
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div>
-          <label htmlFor="userId" className="block text-sm font-medium text-gray-700">
-            User ID (optional)
-          </label>
-          <input
-            id="userId"
-            type="text"
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-            placeholder="Leave blank to auto-generate"
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            Will be auto-generated if left blank
-          </p>
-        </div>
 
         <div>
           <label htmlFor="name" className="block text-sm font-medium text-gray-700">

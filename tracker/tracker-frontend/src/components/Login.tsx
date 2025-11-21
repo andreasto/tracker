@@ -2,12 +2,12 @@ import { useState, FormEvent } from 'react'
 import { api } from '../services/api'
 
 interface LoginProps {
-  onLoginSuccess: (userId: string) => void
+  onLoginSuccess: () => void
   onSwitchToRegister?: () => void
 }
 
 export default function Login({ onLoginSuccess, onSwitchToRegister }: LoginProps) {
-  const [userId, setUserId] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -18,8 +18,8 @@ export default function Login({ onLoginSuccess, onSwitchToRegister }: LoginProps
     setLoading(true)
 
     try {
-      await api.authenticate(userId, password)
-      onLoginSuccess(userId)
+      await api.login({ email, password })
+      onLoginSuccess()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed')
     } finally {
@@ -38,16 +38,16 @@ export default function Login({ onLoginSuccess, onSwitchToRegister }: LoginProps
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label htmlFor="userId" className="block text-sm font-medium text-gray-700">
-            User ID
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            Email
           </label>
           <input
-            id="userId"
-            type="text"
+            id="email"
+            type="email"
             required
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-            placeholder="your-user-id"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="your.email@example.com"
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
           />
         </div>

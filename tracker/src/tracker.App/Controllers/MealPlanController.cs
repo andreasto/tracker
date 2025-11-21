@@ -1,5 +1,6 @@
 using Akka.Actor;
 using Akka.Hosting;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using tracker.App.Actors;
 using tracker.App.Services;
@@ -10,6 +11,7 @@ namespace tracker.App.Controllers;
 
 [ApiController]
 [Route("[controller]")]
+[Authorize]
 public class MealPlanController : ControllerBase
 {
     private readonly ILogger<MealPlanController> _logger;
