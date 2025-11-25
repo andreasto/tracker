@@ -5,6 +5,9 @@ import Login from './components/Login'
 import ProtectedRoute from './components/ProtectedRoute'
 import MealPlanCreator from './components/MealPlanCreator'
 import MealPlanDetails from './components/MealPlanDetails'
+import RecipeList from './components/RecipeList'
+import RecipeCreator from './components/RecipeCreator'
+import RecipeDetail from './components/RecipeDetail'
 import { tokenManager } from './services/api'
 
 function LoginPage() {
@@ -67,6 +70,31 @@ function App() {
             element={
               <ProtectedRoute>
                 <MealPlanDetails />
+              </ProtectedRoute>
+            } 
+          />
+          {/* Recipe Routes */}
+          <Route 
+            path="/recipes" 
+            element={
+              <ProtectedRoute>
+                <RecipeList />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/recipe/create" 
+            element={
+              <ProtectedRoute>
+                <RecipeCreator />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/recipe/:recipeId" 
+            element={
+              <ProtectedRoute>
+                <RecipeDetail />
               </ProtectedRoute>
             } 
           />

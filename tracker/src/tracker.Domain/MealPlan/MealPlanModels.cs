@@ -13,18 +13,25 @@ public record MealPlan
 
 public record MealPlanDay
 {
-    public int DayId { get; init; }
+    public int MealPlanDayId { get; init; }
     public int MealPlanId { get; init; }
-    public DateTime PlanDate { get; init; }
+    public DateTime Date { get; init; }
     public double DayTotalCalories { get; init; }
+    public int DayNumber { get; init; }
 }
 
 public record MealPlanMeal
 {
-    public int MealId { get; init; }
-    public int DayId { get; init; }
+    public int MealPlanMealId { get; init; }
+    public int MealPlanDayId { get; init; }
     public string MealType { get; init; } = string.Empty;
     public double CalorieTarget { get; init; }
+    public int? RecipeId { get; init; }
+    public string RecipeName { get; init; } = string.Empty;
+    public double Kcal { get; init; }
+    public double Protein { get; init; }
+    public double Carbs { get; init; }
+    public double Fat { get; init; }
 }
 
 public record MealTypeDistribution(

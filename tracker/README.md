@@ -1,8 +1,23 @@
-# Akka.NET WebApi Template
+# Tracker - Nutrition & Meal Planning Application
 
-This template is designed to integrate [Akka.NET](https://getakka.net/) with ASP.NET Web APIs.
+This application is built with [Akka.NET](https://getakka.net/) and ASP.NET Web APIs for tracking nutrition, managing meal plans, and creating scalable recipes.
 
 See https://github.com/akkadotnet/akkadotnet-templates/blob/dev/docs/tracker.md for complete and current documentation on this template.
+
+## Features
+
+### Recipe Scaling System
+The application includes a sophisticated recipe scaling system that allows recipes to be dynamically adjusted to match different users' calorie requirements. This means a single recipe can serve all users, regardless of their individual caloric needs.
+
+**Key capabilities:**
+- **Automatic Scaling**: Recipes automatically scale ingredients and macros based on target calories
+- **Universal Access**: Users with higher or lower calorie needs can use the same recipes
+- **Intelligent Matching**: Find recipes that best fit your calorie targets
+- **Nutritional Accuracy**: All macronutrients scale proportionally
+
+📚 **Documentation:**
+- [Recipe Scaling Feature Overview](RECIPE_SCALING_FEATURE.md) - Complete feature documentation
+- [Recipe Scaling Examples](RECIPE_SCALING_EXAMPLES.md) - Practical usage examples with curl commands
 
 ## Key HTTP Routes
 

@@ -176,8 +176,12 @@ public class MealPlanService : IMealPlanService
 
         // Get all days for this plan
         var days = await connection.QueryAsync<MealPlanDay>(
-            @"SELECT day_id as DayId, mealplan_id as MealPlanId, plan_date as PlanDate,
-                     day_total_calories as DayTotalCalories
+            @"SELECT 
+                day_id as MealPlanDayId, 
+                mealplan_id as MealPlanId, 
+                plan_date as Date,
+                day_total_calories as DayTotalCalories,
+                ROW_NUMBER() OVER (ORDER BY plan_date) as DayNumber
               FROM mealplan_days
               WHERE mealplan_id = @MealPlanId
               ORDER BY plan_date",
@@ -186,20 +190,32 @@ public class MealPlanService : IMealPlanService
         var daysWithMeals = new List<DayWithMeals>();
         foreach (var day in days)
         {
-            // Get all meals for this day
-            var meals = await connection.QueryAsync<MealPlanMeal>(
-                @"SELECT meal_id as MealId, day_id as DayId, meal_type as MealType,
-                         calorie_target as CalorieTarget
-                  FROM mealplan_meals
-                  WHERE day_id = @DayId
-                  ORDER BY 
-                    CASE meal_type
-                      WHEN 'breakfast' THEN 1
-                      WHEN 'snack' THEN 2
-                      WHEN 'lunch' THEN 3
-                      WHEN 'dinner' THEN 4
-                    END",
-                new { DayId = day.DayId });
+            // Get all meals for this day with recipe information if assigned
+            var mealsQuery = @"
+                SELECT 
+                    m.meal_id as MealPlanMealId, 
+                    m.day_id as MealPlanDayId, 
+                    m.meal_type as MealType,
+                    m.calorie_target as CalorieTarget,
+                    mr.recipe_id as RecipeId,
+                    COALESCE(r.title, 'Not Assigned') as RecipeName,
+                    COALESCE(r.total_calories * mr.scaling_factor, m.calorie_target) as Kcal,
+                    COALESCE(r.protein_g * mr.scaling_factor, 0) as Protein,
+                    COALESCE(r.carbs_g * mr.scaling_factor, 0) as Carbs,
+                    COALESCE(r.fat_g * mr.scaling_factor, 0) as Fat
+                FROM mealplan_meals m
+                LEFT JOIN mealplan_recipes mr ON m.meal_id = mr.meal_id
+                LEFT JOIN recipes r ON mr.recipe_id = r.recipe_id
+                WHERE m.day_id = @MealPlanDayId
+                ORDER BY 
+                    CASE m.meal_type
+                        WHEN 'breakfast' THEN 1
+                        WHEN 'snack' THEN 2
+                        WHEN 'lunch' THEN 3
+                        WHEN 'dinner' THEN 4
+                    END";
+
+            var meals = await connection.QueryAsync<MealPlanMeal>(mealsQuery, new { MealPlanDayId = day.MealPlanDayId });
 
             daysWithMeals.Add(new DayWithMeals(day, meals.ToList()));
         }

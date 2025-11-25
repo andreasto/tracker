@@ -185,6 +185,87 @@ export interface DayWithMeals {
   meals: MealPlanMeal[]
 }
 
+// Recipe types
+export interface Recipe {
+  recipeId: number
+  title: string
+  description?: string
+  totalCalories: number
+  proteinG?: number
+  fatG?: number
+  carbsG?: number
+  servings: number
+  prepTimeMin?: number
+  tags?: string
+  instructions?: string
+}
+
+export interface Ingredient {
+  ingredientId: number
+  name: string
+  caloriesPer100G?: number
+  proteinPer100G?: number
+  fatPer100G?: number
+  carbsPer100G?: number
+}
+
+export interface RecipeIngredient {
+  recipeId: number
+  ingredientId: number
+  quantityG: number
+  ingredientName: string
+}
+
+export interface RecipeWithIngredients {
+  recipe: Recipe
+  ingredients: RecipeIngredient[]
+}
+
+export interface ScaledRecipe {
+  baseRecipe: Recipe
+  scaledIngredients: ScaledIngredient[]
+  scalingFactor: number
+  targetCalories: number
+  actualCalories: number
+  scaledProteinG?: number
+  scaledFatG?: number
+  scaledCarbsG?: number
+}
+
+export interface ScaledIngredient {
+  ingredientName: string
+  originalQuantityG: number
+  scaledQuantityG: number
+}
+
+export interface CreateRecipeRequest {
+  title: string
+  description?: string
+  totalCalories: number
+  proteinG?: number
+  fatG?: number
+  carbsG?: number
+  servings: number
+  prepTimeMin?: number
+  tags?: string
+  instructions?: string
+  ingredients: RecipeIngredient[]
+}
+
+export interface CreateIngredientRequest {
+  name: string
+  caloriesPer100G?: number
+  proteinPer100G?: number
+  fatPer100G?: number
+  carbsPer100G?: number
+}
+
+export interface AssignRecipeToMealRequest {
+  mealId: number
+  recipeId: number
+  targetCalories: number
+}
+
 // Helper function to get auth headers
 function getAuthHeaders(): HeadersInit {
   const token = tokenManager.getAccessToken()
@@ -557,6 +638,145 @@ export const api = {
 
     if (!response.ok) {
       throw new Error('Failed to fetch user meal plans')
+    }
+
+    return response.json()
+  },
+
+  // Recipe APIs
+  async createRecipe(request: CreateRecipeRequest): Promise<{ recipeId: number; message: string }> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/recipe`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(error || 'Failed to create recipe')
+    }
+
+    return response.json()
+  },
+
+  async getRecipe(recipeId: number): Promise<Recipe> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/recipe/${recipeId}`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch recipe')
+    }
+
+    return response.json()
+  },
+
+  async getRecipeWithIngredients(recipeId: number): Promise<RecipeWithIngredients> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/recipe/${recipeId}/details`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch recipe details')
+    }
+
+    return response.json()
+  },
+
+  async getAllRecipes(): Promise<Recipe[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/recipe`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch recipes')
+    }
+
+    return response.json()
+  },
+
+  async searchRecipes(params: {
+    searchTerm?: string
+    minCalories?: number
+    maxCalories?: number
+    tags?: string
+  }): Promise<Recipe[]> {
+    const queryParams = new URLSearchParams()
+    if (params.searchTerm) queryParams.append('searchTerm', params.searchTerm)
+    if (params.minCalories !== undefined) queryParams.append('minCalories', params.minCalories.toString())
+    if (params.maxCalories !== undefined) queryParams.append('maxCalories', params.maxCalories.toString())
+    if (params.tags) queryParams.append('tags', params.tags)
+
+    const response = await fetchWithAuth(`${API_BASE_URL}/recipe/search?${queryParams}`)
+
+    if (!response.ok) {
+      throw new Error('Failed to search recipes')
+    }
+
+    return response.json()
+  },
+
+  async getScaledRecipe(recipeId: number, targetCalories: number): Promise<ScaledRecipe> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/recipe/${recipeId}/scale?targetCalories=${targetCalories}`
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch scaled recipe')
+    }
+
+    return response.json()
+  },
+
+  async findRecipesByCalories(targetCalories: number, tolerance: number = 0.2): Promise<ScaledRecipe[]> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/recipe/find-by-calories?targetCalories=${targetCalories}&tolerance=${tolerance}`
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to find recipes by calories')
+    }
+
+    return response.json()
+  },
+
+  async assignRecipeToMeal(request: AssignRecipeToMealRequest): Promise<{ message: string }> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/recipe/assign-to-meal`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(error || 'Failed to assign recipe to meal')
+    }
+
+    return response.json()
+  },
+
+  // Ingredient APIs
+  async createIngredient(request: CreateIngredientRequest): Promise<{ ingredientId: number; message: string }> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/recipe/ingredients`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(error || 'Failed to create ingredient')
+    }
+
+    return response.json()
+  },
+
+  async getAllIngredients(): Promise<Ingredient[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/recipe/ingredients`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch ingredients')
+    }
+
+    return response.json()
+  },
+
+  async getIngredient(ingredientId: number): Promise<Ingredient> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/recipe/ingredients/${ingredientId}`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch ingredient')
     }
 
     return response.json()

@@ -92,16 +92,22 @@ export default function Dashboard() {
             </div>
             <div className="flex gap-3">
               <button
+                onClick={() => navigate('/recipes')}
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 font-medium"
+              >
+                🍳 Recipes
+              </button>
+              <button
                 onClick={() => navigate('/meal-plan/create')}
                 className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium"
               >
-                🍽️ Create Meal Plan
+                🍽️ Meal Plans
               </button>
               <button
                 onClick={() => setShowCheckInForm(true)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
               >
-                📊 New Check-In
+                📊 Check-In
               </button>
               <button
                 onClick={handleLogout}

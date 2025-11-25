@@ -38,6 +38,9 @@ if (akkaSettings?.PersistenceMode == PersistenceMode.PostgreSql)
         
         // Register MealPlanService
         builder.Services.AddSingleton<IMealPlanService>(sp => new MealPlanService(connectionString));
+        
+        // Register RecipeService
+        builder.Services.AddSingleton<IRecipeService>(sp => new RecipeService(connectionString));
     }
 }
 
