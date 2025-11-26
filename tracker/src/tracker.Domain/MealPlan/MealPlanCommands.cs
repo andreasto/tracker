@@ -9,8 +9,10 @@ public interface IMealPlanCommand : IWithUserId
 public sealed record CreateMealPlanCommand(
     string UserId,
     string PlanName,
-    DateTime StartDate,
-    DateTime? EndDate = null) : IMealPlanCommand;
+    int BreakfastCount,
+    int LunchCount,
+    int DinnerCount,
+    int SnackCount) : IMealPlanCommand;
 
 public sealed record MealPlanCommandResponse(
     string UserId,

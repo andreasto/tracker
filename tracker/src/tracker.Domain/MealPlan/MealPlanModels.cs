@@ -5,8 +5,6 @@ public record MealPlan
     public int MealPlanId { get; init; }
     public string UserId { get; init; } = string.Empty;
     public string PlanName { get; init; } = string.Empty;
-    public DateTime StartDate { get; init; }
-    public DateTime? EndDate { get; init; }
     public double TotalCalories { get; init; }
     public DateTime CreatedAt { get; init; }
 }
@@ -23,9 +21,10 @@ public record MealPlanDay
 public record MealPlanMeal
 {
     public int MealPlanMealId { get; init; }
-    public int MealPlanDayId { get; init; }
+    public int MealPlanId { get; init; }
     public string MealType { get; init; } = string.Empty;
     public double CalorieTarget { get; init; }
+    public int MealOrder { get; init; }
     public int? RecipeId { get; init; }
     public string RecipeName { get; init; } = string.Empty;
     public double Kcal { get; init; }

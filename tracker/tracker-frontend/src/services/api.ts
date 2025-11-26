@@ -133,8 +133,10 @@ export interface SubmitCheckInRequest {
 
 export interface CreateMealPlanRequest {
   planName: string
-  startDate: string
-  endDate?: string
+  breakfastCount: number
+  lunchCount: number
+  dinnerCount: number
+  snackCount: number
 }
 
 export interface CreateMealPlanResponse {
@@ -146,8 +148,6 @@ export interface MealPlan {
   mealPlanId: number
   userId: string
   planName: string
-  startDate: string
-  endDate?: string
   createdAt: string
   totalKcal?: number
   totalProtein?: number
@@ -155,16 +155,9 @@ export interface MealPlan {
   totalFat?: number
 }
 
-export interface MealPlanDay {
-  mealPlanDayId: number
-  mealPlanId: number
-  date: string
-  dayNumber: number
-}
-
 export interface MealPlanMeal {
   mealPlanMealId: number
-  mealPlanDayId: number
+  mealPlanId: number
   recipeId?: number
   recipeName: string
   mealType: string
@@ -177,11 +170,11 @@ export interface MealPlanMeal {
 
 export interface MealPlanDetails {
   plan: MealPlan
-  days: DayWithMeals[]
+  mealsByType: MealTypeGroup[]
 }
 
-export interface DayWithMeals {
-  day: MealPlanDay
+export interface MealTypeGroup {
+  mealType: string
   meals: MealPlanMeal[]
 }
 
@@ -643,6 +636,19 @@ export const api = {
     return response.json()
   },
 
+  async deleteMealPlan(mealPlanId: number): Promise<{ message: string }> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/mealplan/${mealPlanId}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(error || 'Failed to delete meal plan')
+    }
+
+    return response.json()
+  },
+
   // Recipe APIs
   async createRecipe(request: CreateRecipeRequest): Promise<{ recipeId: number; message: string }> {
     const response = await fetchWithAuth(`${API_BASE_URL}/recipe`, {
@@ -782,4 +788,3 @@ export const api = {
     return response.json()
   },
 }
-

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { api, MealPlanDetails, User, Recipe, ScaledRecipe } from '../services/api'
+import { api, MealPlanDetails, User, Recipe, ScaledRecipe, MealTypeGroup } from '../services/api'
 
 export default function MealPlanDetailsComponent() {
   const { mealPlanId } = useParams<{ mealPlanId: string }>()
@@ -132,12 +132,12 @@ export default function MealPlanDetailsComponent() {
     )
   }
 
-  const { plan, days } = details
+  const { plan, mealsByType } = details
   const dailyCalorieTarget = user?.bmrWithActivityLevel 
     ? Math.round(user.bmrWithActivityLevel) 
     : null
 
-  // Group meals by meal type for better visualization
+  // Get emoji for meal type
   const getMealTypeEmoji = (mealType: string) => {
     const type = mealType.toLowerCase()
     if (type.includes('breakfast')) return '🌅'
@@ -145,6 +145,10 @@ export default function MealPlanDetailsComponent() {
     if (type.includes('dinner')) return '🌙'
     if (type.includes('snack')) return '🍎'
     return '🍽️'
+  }
+
+  const getMealTypeLabel = (mealType: string) => {
+    return mealType.charAt(0).toUpperCase() + mealType.slice(1)
   }
 
   return (
@@ -167,21 +171,13 @@ export default function MealPlanDetailsComponent() {
           
           <div className="bg-white shadow rounded-lg p-6">
             <h1 className="text-3xl font-bold text-gray-900">{plan.planName}</h1>
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p className="text-sm text-gray-600">Start Date</p>
+                <p className="text-sm text-gray-600">Created</p>
                 <p className="text-lg font-semibold">
-                  {new Date(plan.startDate).toLocaleDateString()}
+                  {new Date(plan.createdAt).toLocaleDateString()}
                 </p>
               </div>
-              {plan.endDate && (
-                <div>
-                  <p className="text-sm text-gray-600">End Date</p>
-                  <p className="text-lg font-semibold">
-                    {new Date(plan.endDate).toLocaleDateString()}
-                  </p>
-                </div>
-              )}
               <div>
                 <p className="text-sm text-gray-600">Target Calories/Day</p>
                 <p className="text-lg font-semibold text-blue-600">
@@ -192,14 +188,14 @@ export default function MealPlanDetailsComponent() {
           </div>
         </div>
 
-        {/* Days and Meals */}
-        {days.length === 0 ? (
+        {/* Meals grouped by type */}
+        {mealsByType.length === 0 ? (
           <div className="bg-white shadow rounded-lg p-12 text-center">
             <p className="text-gray-600 text-lg mb-4">
               Your meal plan has been created! 🎉
             </p>
             <p className="text-gray-500 text-sm mb-6">
-              Days and meals will be automatically generated based on your calorie targets.
+              Meal slots will be generated based on your selections.
             </p>
             <button
               onClick={() => navigate('/dashboard')}
@@ -210,64 +206,67 @@ export default function MealPlanDetailsComponent() {
           </div>
         ) : (
           <div className="space-y-6">
-            {days.map((dayWithMeals) => {
-              const dayDate = new Date(dayWithMeals.day.date)
-              const totalDayKcal = dayWithMeals.meals.reduce((sum, meal) => sum + meal.kcal, 0)
-              const totalDayProtein = dayWithMeals.meals.reduce((sum, meal) => sum + meal.protein, 0)
-              const totalDayCarbs = dayWithMeals.meals.reduce((sum, meal) => sum + meal.carbs, 0)
-              const totalDayFat = dayWithMeals.meals.reduce((sum, meal) => sum + meal.fat, 0)
+            {mealsByType.map((mealTypeGroup) => {
+              const totalKcal = mealTypeGroup.meals.reduce((sum, meal) => sum + meal.kcal, 0)
+              const totalProtein = mealTypeGroup.meals.reduce((sum, meal) => sum + meal.protein, 0)
+              const totalCarbs = mealTypeGroup.meals.reduce((sum, meal) => sum + meal.carbs, 0)
+              const totalFat = mealTypeGroup.meals.reduce((sum, meal) => sum + meal.fat, 0)
+              const avgKcal = mealTypeGroup.meals.length > 0 ? totalKcal / mealTypeGroup.meals.length : 0
 
               return (
-                <div key={dayWithMeals.day.mealPlanDayId} className="bg-white shadow rounded-lg p-6">
+                <div key={mealTypeGroup.mealType} className="bg-white shadow rounded-lg p-6">
                   <div className="border-b border-gray-200 pb-4 mb-4">
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      Day {dayWithMeals.day.dayNumber} - {dayDate.toLocaleDateString('en-US', { 
-                        weekday: 'long', 
-                        month: 'long', 
-                        day: 'numeric' 
-                      })}
+                    <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                      <span className="mr-3">{getMealTypeEmoji(mealTypeGroup.mealType)}</span>
+                      {getMealTypeLabel(mealTypeGroup.mealType)} Options
+                      <span className="ml-3 text-sm font-normal text-gray-500">
+                        ({mealTypeGroup.meals.length} recipe{mealTypeGroup.meals.length !== 1 ? 's' : ''})
+                      </span>
                     </h2>
                     <div className="mt-2 flex flex-wrap gap-4 text-sm">
                       <div className="flex items-center">
-                        <span className="text-gray-600">Total:</span>
+                        <span className="text-gray-600">Avg per meal:</span>
                         <span className="ml-2 font-semibold text-blue-600">
-                          {Math.round(totalDayKcal)} kcal
+                          {Math.round(avgKcal)} kcal
                         </span>
                       </div>
                       <div className="flex items-center">
-                        <span className="text-gray-600">Protein:</span>
+                        <span className="text-gray-600">Avg Protein:</span>
                         <span className="ml-2 font-semibold text-orange-600">
-                          {Math.round(totalDayProtein)}g
+                          {Math.round(totalProtein / mealTypeGroup.meals.length)}g
                         </span>
                       </div>
                       <div className="flex items-center">
-                        <span className="text-gray-600">Carbs:</span>
+                        <span className="text-gray-600">Avg Carbs:</span>
                         <span className="ml-2 font-semibold text-yellow-600">
-                          {Math.round(totalDayCarbs)}g
+                          {Math.round(totalCarbs / mealTypeGroup.meals.length)}g
                         </span>
                       </div>
                       <div className="flex items-center">
-                        <span className="text-gray-600">Fat:</span>
+                        <span className="text-gray-600">Avg Fat:</span>
                         <span className="ml-2 font-semibold text-green-600">
-                          {Math.round(totalDayFat)}g
+                          {Math.round(totalFat / mealTypeGroup.meals.length)}g
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-4">
-                    {dayWithMeals.meals.map((meal) => (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {mealTypeGroup.meals.map((meal, index) => (
                       <div
                         key={meal.mealPlanMealId}
                         className="border border-gray-200 rounded-lg p-4 hover:border-blue-400 transition-colors"
                       >
-                        <div className="flex items-start justify-between">
+                        <div className="flex items-start justify-between mb-3">
                           <div className="flex-1">
-                            <h3 className="font-semibold text-gray-900 flex items-center">
-                              <span className="mr-2">{getMealTypeEmoji(meal.mealType)}</span>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                Option {index + 1}
+                              </span>
+                            </div>
+                            <h3 className="font-semibold text-gray-900">
                               {meal.recipeName}
                             </h3>
-                            <p className="text-sm text-gray-600 mt-1">{meal.mealType}</p>
                           </div>
                           <div className="text-right ml-4">
                             <p className="text-lg font-bold text-blue-600">
@@ -276,41 +275,41 @@ export default function MealPlanDetailsComponent() {
                           </div>
                         </div>
                         
-                        <div className="mt-3 grid grid-cols-3 gap-4 text-sm">
+                        <div className="grid grid-cols-3 gap-2 text-xs mb-3">
                           <div>
                             <span className="text-gray-600">Protein:</span>
-                            <span className="ml-2 font-semibold text-orange-600">
+                            <span className="ml-1 font-semibold text-orange-600">
                               {Math.round(meal.protein)}g
                             </span>
                           </div>
                           <div>
                             <span className="text-gray-600">Carbs:</span>
-                            <span className="ml-2 font-semibold text-yellow-600">
+                            <span className="ml-1 font-semibold text-yellow-600">
                               {Math.round(meal.carbs)}g
                             </span>
                           </div>
                           <div>
                             <span className="text-gray-600">Fat:</span>
-                            <span className="ml-2 font-semibold text-green-600">
+                            <span className="ml-1 font-semibold text-green-600">
                               {Math.round(meal.fat)}g
                             </span>
                           </div>
                         </div>
 
-                        <div className="mt-3 flex gap-3">
+                        <div className="flex gap-2 text-xs">
                           {meal.recipeId && (
                             <button 
                               onClick={() => navigate(`/recipe/${meal.recipeId}?targetCalories=${meal.kcal}`)}
-                              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                              className="text-blue-600 hover:text-blue-800 font-medium"
                             >
-                              View Recipe Details →
+                              View Details →
                             </button>
                           )}
                           <button 
                             onClick={() => handleSelectRecipeForMeal(meal.mealPlanMealId, meal.kcal)}
-                            className="text-sm text-green-600 hover:text-green-800 font-medium"
+                            className="text-green-600 hover:text-green-800 font-medium"
                           >
-                            {meal.recipeId ? '🔄 Change Recipe' : '➕ Assign Recipe'}
+                            {meal.recipeId ? '🔄 Change' : '➕ Assign'}
                           </button>
                         </div>
                       </div>
@@ -323,50 +322,66 @@ export default function MealPlanDetailsComponent() {
         )}
 
         {/* Nutrition Summary */}
-        {days.length > 0 && (
+        {mealsByType.length > 0 && (
           <div className="mt-8 bg-white shadow rounded-lg p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Plan Summary</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Daily Nutrition Estimate</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Expected daily totals when choosing one recipe from each meal type
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="bg-blue-50 rounded-lg p-4">
-                <p className="text-sm text-gray-600">Avg Daily Calories</p>
+                <p className="text-sm text-gray-600">Daily Calories</p>
                 <p className="text-2xl font-bold text-blue-600">
                   {Math.round(
-                    days.reduce((sum, d) => 
-                      sum + d.meals.reduce((mealSum, m) => mealSum + m.kcal, 0), 0
-                    ) / days.length
+                    mealsByType.reduce((sum, group) => {
+                      const avgKcal = group.meals.reduce((mealSum, m) => mealSum + m.kcal, 0) / group.meals.length
+                      return sum + avgKcal
+                    }, 0)
                   )} kcal
                 </p>
+                {dailyCalorieTarget && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Target: {dailyCalorieTarget} kcal
+                  </p>
+                )}
               </div>
               <div className="bg-orange-50 rounded-lg p-4">
-                <p className="text-sm text-gray-600">Avg Daily Protein</p>
+                <p className="text-sm text-gray-600">Daily Protein</p>
                 <p className="text-2xl font-bold text-orange-600">
                   {Math.round(
-                    days.reduce((sum, d) => 
-                      sum + d.meals.reduce((mealSum, m) => mealSum + m.protein, 0), 0
-                    ) / days.length
+                    mealsByType.reduce((sum, group) => {
+                      const avgProtein = group.meals.reduce((mealSum, m) => mealSum + m.protein, 0) / group.meals.length
+                      return sum + avgProtein
+                    }, 0)
                   )}g
                 </p>
               </div>
               <div className="bg-yellow-50 rounded-lg p-4">
-                <p className="text-sm text-gray-600">Avg Daily Carbs</p>
+                <p className="text-sm text-gray-600">Daily Carbs</p>
                 <p className="text-2xl font-bold text-yellow-600">
                   {Math.round(
-                    days.reduce((sum, d) => 
-                      sum + d.meals.reduce((mealSum, m) => mealSum + m.carbs, 0), 0
-                    ) / days.length
+                    mealsByType.reduce((sum, group) => {
+                      const avgCarbs = group.meals.reduce((mealSum, m) => mealSum + m.carbs, 0) / group.meals.length
+                      return sum + avgCarbs
+                    }, 0)
                   )}g
                 </p>
               </div>
               <div className="bg-green-50 rounded-lg p-4">
-                <p className="text-sm text-gray-600">Avg Daily Fat</p>
+                <p className="text-sm text-gray-600">Daily Fat</p>
                 <p className="text-2xl font-bold text-green-600">
                   {Math.round(
-                    days.reduce((sum, d) => 
-                      sum + d.meals.reduce((mealSum, m) => mealSum + m.fat, 0), 0
-                    ) / days.length
+                    mealsByType.reduce((sum, group) => {
+                      const avgFat = group.meals.reduce((mealSum, m) => mealSum + m.fat, 0) / group.meals.length
+                      return sum + avgFat
+                    }, 0)
                   )}g
                 </p>
               </div>
+            </div>
+            <div className="mt-4 text-xs text-gray-500 bg-gray-50 rounded p-3">
+              <p className="font-medium mb-1">💡 How this works:</p>
+              <p>These numbers represent your expected daily intake when selecting one recipe from each meal type. For example, if you have 3 breakfast options averaging 600 kcal each, we count 600 kcal toward your daily total.</p>
             </div>
           </div>
         )}

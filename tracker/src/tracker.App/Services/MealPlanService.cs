@@ -9,22 +9,24 @@ public interface IMealPlanService
     Task<MealPlanCommandResponse> CreateMealPlanAsync(
         string userId,
         string planName,
-        DateTime startDate,
-        DateTime? endDate,
         double bmrWithActivityLevel,
-        int mealsPerDay);
+        int breakfastCount,
+        int lunchCount,
+        int dinnerCount,
+        int snackCount);
     
     Task<MealPlan?> GetMealPlanAsync(int mealPlanId);
     Task<List<MealPlan>> GetUserMealPlansAsync(string userId);
     Task<MealPlanDetails?> GetMealPlanDetailsAsync(int mealPlanId);
+    Task<bool> DeleteMealPlanAsync(int mealPlanId, string userId);
 }
 
 public record MealPlanDetails(
     MealPlan Plan,
-    List<DayWithMeals> Days);
+    List<MealTypeGroup> MealsByType);
 
-public record DayWithMeals(
-    MealPlanDay Day,
+public record MealTypeGroup(
+    string MealType,
     List<MealPlanMeal> Meals);
 
 public class MealPlanService : IMealPlanService
@@ -39,10 +41,11 @@ public class MealPlanService : IMealPlanService
     public async Task<MealPlanCommandResponse> CreateMealPlanAsync(
         string userId,
         string planName,
-        DateTime startDate,
-        DateTime? endDate,
         double bmrWithActivityLevel,
-        int mealsPerDay)
+        int breakfastCount,
+        int lunchCount,
+        int dinnerCount,
+        int snackCount)
     {
         try
         {
@@ -55,58 +58,46 @@ public class MealPlanService : IMealPlanService
             {
                 // Insert meal plan
                 var mealPlanId = await connection.ExecuteScalarAsync<int>(
-                    @"INSERT INTO mealplans (user_id, plan_name, start_date, end_date, total_calories)
-                      VALUES (@UserId, @PlanName, @StartDate, @EndDate, @TotalCalories)
+                    @"INSERT INTO mealplans (user_id, plan_name, total_calories)
+                      VALUES (@UserId, @PlanName, @TotalCalories)
                       RETURNING mealplan_id",
                     new
                     {
                         UserId = userId,
                         PlanName = planName,
-                        StartDate = startDate.Date,
-                        EndDate = endDate?.Date,
                         TotalCalories = bmrWithActivityLevel
                     },
                     transaction);
 
-                // Get meal distribution based on meals per day
-                var distribution = MealPlanDefaults.GetDistribution(mealsPerDay);
-
-                // Calculate number of days
-                var daysToCreate = endDate.HasValue 
-                    ? (endDate.Value.Date - startDate.Date).Days + 1 
-                    : 7; // Default to 1 week if no end date
-
-                // Create days and meals
-                for (int i = 0; i < daysToCreate; i++)
+                // Create meal slots for each meal type (percentages must sum to 1.0 = 100%)
+                var mealTypes = new[]
                 {
-                    var planDate = startDate.Date.AddDays(i);
+                    ("breakfast", breakfastCount, 0.25),  // 25%
+                    ("lunch", lunchCount, 0.35),           // 35%
+                    ("dinner", dinnerCount, 0.30),         // 30%
+                    ("snack", snackCount, 0.10)            // 10%
+                };                                          // Total: 100% ✓
 
-                    // Insert day
-                    var dayId = await connection.ExecuteScalarAsync<int>(
-                        @"INSERT INTO mealplan_days (mealplan_id, plan_date, day_total_calories)
-                          VALUES (@MealPlanId, @PlanDate, @DayTotalCalories)
-                          RETURNING day_id",
-                        new
-                        {
-                            MealPlanId = mealPlanId,
-                            PlanDate = planDate,
-                            DayTotalCalories = bmrWithActivityLevel
-                        },
-                        transaction);
+                int mealOrder = 1;
+                foreach (var (mealType, count, percentage) in mealTypes)
+                {
+                    // Skip if no meals of this type
+                    if (count == 0) continue;
+                    
+                    // Each meal option gets the full percentage - user chooses ONE option per day
+                    var calorieTarget = bmrWithActivityLevel * percentage;
 
-                    // Insert meals for the day
-                    foreach (var meal in distribution)
+                    for (int i = 0; i < count; i++)
                     {
-                        var calorieTarget = bmrWithActivityLevel * meal.Percentage;
-
                         await connection.ExecuteAsync(
-                            @"INSERT INTO mealplan_meals (day_id, meal_type, calorie_target)
-                              VALUES (@DayId, @MealType, @CalorieTarget)",
+                            @"INSERT INTO mealplan_meals (mealplan_id, meal_type, calorie_target, meal_order)
+                              VALUES (@MealPlanId, @MealType, @CalorieTarget, @MealOrder)",
                             new
                             {
-                                DayId = dayId,
-                                MealType = meal.MealType,
-                                CalorieTarget = calorieTarget
+                                MealPlanId = mealPlanId,
+                                MealType = mealType,
+                                CalorieTarget = calorieTarget,
+                                MealOrder = mealOrder++
                             },
                             transaction);
                     }
@@ -141,8 +132,7 @@ public class MealPlanService : IMealPlanService
 
         return await connection.QuerySingleOrDefaultAsync<MealPlan>(
             @"SELECT mealplan_id as MealPlanId, user_id as UserId, plan_name as PlanName, 
-                     start_date as StartDate, end_date as EndDate, total_calories as TotalCalories,
-                     created_at as CreatedAt
+                     total_calories as TotalCalories, created_at as CreatedAt
               FROM mealplans
               WHERE mealplan_id = @MealPlanId",
             new { MealPlanId = mealPlanId });
@@ -155,8 +145,7 @@ public class MealPlanService : IMealPlanService
 
         var result = await connection.QueryAsync<MealPlan>(
             @"SELECT mealplan_id as MealPlanId, user_id as UserId, plan_name as PlanName, 
-                     start_date as StartDate, end_date as EndDate, total_calories as TotalCalories,
-                     created_at as CreatedAt
+                     total_calories as TotalCalories, created_at as CreatedAt
               FROM mealplans
               WHERE user_id = @UserId
               ORDER BY created_at DESC",
@@ -174,53 +163,85 @@ public class MealPlanService : IMealPlanService
         var plan = await GetMealPlanAsync(mealPlanId);
         if (plan == null) return null;
 
-        // Get all days for this plan
-        var days = await connection.QueryAsync<MealPlanDay>(
-            @"SELECT 
-                day_id as MealPlanDayId, 
-                mealplan_id as MealPlanId, 
-                plan_date as Date,
-                day_total_calories as DayTotalCalories,
-                ROW_NUMBER() OVER (ORDER BY plan_date) as DayNumber
-              FROM mealplan_days
-              WHERE mealplan_id = @MealPlanId
-              ORDER BY plan_date",
-            new { MealPlanId = mealPlanId });
+        // Get all meals for this plan with recipe information if assigned
+        var mealsQuery = @"
+            SELECT 
+                m.meal_id as MealPlanMealId, 
+                m.mealplan_id as MealPlanId,
+                m.meal_type as MealType,
+                m.calorie_target as CalorieTarget,
+                m.meal_order as MealOrder,
+                mr.recipe_id as RecipeId,
+                COALESCE(r.title, 'Not Assigned') as RecipeName,
+                COALESCE(r.total_calories * mr.scaling_factor, m.calorie_target) as Kcal,
+                COALESCE(r.protein_g * mr.scaling_factor, 0) as Protein,
+                COALESCE(r.carbs_g * mr.scaling_factor, 0) as Carbs,
+                COALESCE(r.fat_g * mr.scaling_factor, 0) as Fat
+            FROM mealplan_meals m
+            LEFT JOIN mealplan_recipes mr ON m.meal_id = mr.meal_id
+            LEFT JOIN recipes r ON mr.recipe_id = r.recipe_id
+            WHERE m.mealplan_id = @MealPlanId
+            ORDER BY m.meal_order";
 
-        var daysWithMeals = new List<DayWithMeals>();
-        foreach (var day in days)
+        var meals = await connection.QueryAsync<MealPlanMeal>(mealsQuery, new { MealPlanId = mealPlanId });
+
+        // Group meals by type
+        var mealsByType = meals
+            .GroupBy(m => m.MealType)
+            .Select(g => new MealTypeGroup(g.Key, g.ToList()))
+            .OrderBy(g => g.MealType switch
+            {
+                "breakfast" => 1,
+                "lunch" => 2,
+                "dinner" => 3,
+                "snack" => 4,
+                _ => 5
+            })
+            .ToList();
+
+        return new MealPlanDetails(plan, mealsByType);
+    }
+
+    public async Task<bool> DeleteMealPlanAsync(int mealPlanId, string userId)
+    {
+        try
         {
-            // Get all meals for this day with recipe information if assigned
-            var mealsQuery = @"
-                SELECT 
-                    m.meal_id as MealPlanMealId, 
-                    m.day_id as MealPlanDayId, 
-                    m.meal_type as MealType,
-                    m.calorie_target as CalorieTarget,
-                    mr.recipe_id as RecipeId,
-                    COALESCE(r.title, 'Not Assigned') as RecipeName,
-                    COALESCE(r.total_calories * mr.scaling_factor, m.calorie_target) as Kcal,
-                    COALESCE(r.protein_g * mr.scaling_factor, 0) as Protein,
-                    COALESCE(r.carbs_g * mr.scaling_factor, 0) as Carbs,
-                    COALESCE(r.fat_g * mr.scaling_factor, 0) as Fat
-                FROM mealplan_meals m
-                LEFT JOIN mealplan_recipes mr ON m.meal_id = mr.meal_id
-                LEFT JOIN recipes r ON mr.recipe_id = r.recipe_id
-                WHERE m.day_id = @MealPlanDayId
-                ORDER BY 
-                    CASE m.meal_type
-                        WHEN 'breakfast' THEN 1
-                        WHEN 'snack' THEN 2
-                        WHEN 'lunch' THEN 3
-                        WHEN 'dinner' THEN 4
-                    END";
+            await using var connection = new NpgsqlConnection(_connectionString);
+            await connection.OpenAsync();
 
-            var meals = await connection.QueryAsync<MealPlanMeal>(mealsQuery, new { MealPlanDayId = day.MealPlanDayId });
+            // Check if the meal plan belongs to the user
+            var existingPlan = await GetMealPlanAsync(mealPlanId);
+            if (existingPlan == null || existingPlan.UserId != userId)
+                return false; // Not found or not authorized
 
-            daysWithMeals.Add(new DayWithMeals(day, meals.ToList()));
+            await using var transaction = await connection.BeginTransactionAsync();
+
+            try
+            {
+                // Delete meal plan meals
+                await connection.ExecuteAsync(
+                    @"DELETE FROM mealplan_meals WHERE mealplan_id = @MealPlanId",
+                    new { MealPlanId = mealPlanId },
+                    transaction);
+
+                // Delete meal plan
+                await connection.ExecuteAsync(
+                    @"DELETE FROM mealplans WHERE mealplan_id = @MealPlanId",
+                    new { MealPlanId = mealPlanId },
+                    transaction);
+
+                await transaction.CommitAsync();
+                return true;
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
-
-        return new MealPlanDetails(plan, daysWithMeals);
+        catch
+        {
+            return false;
+        }
     }
 }
-

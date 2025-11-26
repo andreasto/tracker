@@ -51,23 +51,21 @@ public class MealPlanController : ControllerBase
                 return BadRequest("User BMR not calculated");
             }
 
-            // Get meals per day from questionnaire, default to 3 if not provided
-            var mealsPerDay = 3;
-            if (user.QuestionnaireAnswers?.TryGetValue("mealsPerDay", out var mealsPerDayStr) == true)
+            var totalMeals = request.BreakfastCount + request.LunchCount + request.DinnerCount + request.SnackCount;
+            
+            if (totalMeals == 0)
             {
-                if (int.TryParse(mealsPerDayStr, out var parsedMeals) && parsedMeals >= 3 && parsedMeals <= 5)
-                {
-                    mealsPerDay = parsedMeals;
-                }
+                return BadRequest("At least one meal type must be selected");
             }
 
             var result = await _mealPlanService.CreateMealPlanAsync(
                 userId,
                 request.PlanName,
-                request.StartDate,
-                request.EndDate,
                 user.BmrWithActivityLevel.Value,
-                mealsPerDay);
+                request.BreakfastCount,
+                request.LunchCount,
+                request.DinnerCount,
+                request.SnackCount);
 
             if (!result.IsSuccess)
             {
@@ -77,7 +75,7 @@ public class MealPlanController : ControllerBase
             return Ok(new
             {
                 MealPlanId = result.MealPlanId,
-                Message = $"Meal plan created successfully with {mealsPerDay} meals per day"
+                Message = $"Meal plan created successfully with {totalMeals} total meal slots"
             });
         }
         catch (Exception ex)
@@ -104,6 +102,35 @@ public class MealPlanController : ControllerBase
         {
             _logger.LogError(ex, "Error getting meal plan {MealPlanId}", mealPlanId);
             return StatusCode(500, "An error occurred while retrieving the meal plan");
+        }
+    }
+
+    [HttpDelete("{mealPlanId:int}")]
+    public async Task<IActionResult> DeleteMealPlan(int mealPlanId)
+    {
+        try
+        {
+            // Get the authenticated user's ID from the claims (same as UserController)
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized("User ID not found in token");
+            }
+
+            var deleted = await _mealPlanService.DeleteMealPlanAsync(mealPlanId, userId);
+            
+            if (!deleted)
+            {
+                return NotFound("Meal plan not found or you don't have permission to delete it");
+            }
+
+            return Ok(new { Message = "Meal plan deleted successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting meal plan {MealPlanId}", mealPlanId);
+            return StatusCode(500, "An error occurred while deleting the meal plan");
         }
     }
 
@@ -145,6 +172,7 @@ public class MealPlanController : ControllerBase
 
 public record CreateMealPlanRequest(
     string PlanName,
-    DateTime StartDate,
-    DateTime? EndDate = null);
-
+    int BreakfastCount,
+    int LunchCount,
+    int DinnerCount,
+    int SnackCount);

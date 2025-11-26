@@ -12,9 +12,10 @@ export default function MealPlanCreator() {
   
   // Form state
   const [planName, setPlanName] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [showEndDate, setShowEndDate] = useState(false)
+  const [breakfastCount, setBreakfastCount] = useState(3)
+  const [lunchCount, setLunchCount] = useState(3)
+  const [dinnerCount, setDinnerCount] = useState(3)
+  const [snackCount, setSnackCount] = useState(2)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -25,10 +26,6 @@ export default function MealPlanCreator() {
         // Fetch existing meal plans
         const plans = await api.getUserMealPlans(userData.userId)
         setExistingPlans(plans)
-        
-        // Set default start date to today
-        const today = new Date().toISOString().split('T')[0]
-        setStartDate(today)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load data')
         if (err instanceof Error && err.message.includes('Authentication required')) {
@@ -52,10 +49,11 @@ export default function MealPlanCreator() {
       return
     }
     
-    if (!startDate) {
-      setError('Please select a start date')
+    if (breakfastCount + lunchCount + dinnerCount + snackCount === 0) {
+      setError('Please select at least one meal')
       return
     }
+    
     console.log('User onboarding state:', typeof user.onboardingState)
     if (user.onboardingState !== UserOnboardingState.Complete) {
       setError('You must complete onboarding before creating a meal plan')
@@ -73,8 +71,10 @@ export default function MealPlanCreator() {
     try {
       const result = await api.createMealPlan(user.userId, {
         planName: planName.trim(),
-        startDate: startDate,
-        endDate: showEndDate && endDate ? endDate : undefined,
+        breakfastCount,
+        lunchCount,
+        dinnerCount,
+        snackCount,
       })
 
       // Navigate to the meal plan details page
@@ -87,6 +87,31 @@ export default function MealPlanCreator() {
 
   const handleViewPlan = (mealPlanId: number) => {
     navigate(`/meal-plan/${mealPlanId}`)
+  }
+
+  const handleDeletePlan = async (mealPlanId: number, planName: string, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent card click from triggering
+    
+    if (!window.confirm(`Are you sure you want to delete "${planName}"? This action cannot be undone.`)) {
+      return
+    }
+
+    try {
+      await api.deleteMealPlan(mealPlanId)
+      
+      // Remove from local state
+      setExistingPlans(existingPlans.filter(p => p.mealPlanId !== mealPlanId))
+      
+      // Show success message briefly
+      setError(null)
+      const successDiv = document.createElement('div')
+      successDiv.className = 'fixed top-4 right-4 bg-green-50 border border-green-200 text-green-700 px-6 py-3 rounded-lg shadow-lg z-50'
+      successDiv.textContent = 'Meal plan deleted successfully'
+      document.body.appendChild(successDiv)
+      setTimeout(() => successDiv.remove(), 3000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete meal plan')
+    }
   }
 
   if (loading) {
@@ -157,14 +182,15 @@ export default function MealPlanCreator() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Meals Per Day</p>
-                    <p className="text-2xl font-bold text-green-600">{mealsPerDay} meals</p>
+                    <p className="text-sm text-gray-600">Total Meals Selected</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {breakfastCount + lunchCount + dinnerCount + snackCount} meals
+                    </p>
                   </div>
                 </div>
                 {dailyCalorieTarget && (
                   <p className="mt-3 text-xs text-gray-600">
-                    💡 Your meal plan will be distributed across {mealsPerDay} meals, 
-                    approximately {Math.round(dailyCalorieTarget / parseInt(mealsPerDay))} kcal per meal
+                    💡 Create a rotating meal plan with your chosen number of recipes for each meal type
                   </p>
                 )}
               </div>
@@ -187,44 +213,75 @@ export default function MealPlanCreator() {
                     />
                   </div>
 
-                  <div>
-                    <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
-                      Start Date *
-                    </label>
-                    <input
-                      type="date"
-                      id="startDate"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 border"
-                      required
-                    />
-                  </div>
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-gray-900 mt-4">
+                      Select Number of Recipes per Meal Type
+                    </h3>
+                    <p className="text-xs text-gray-600">
+                      Choose how many different recipes you want for each meal type in your rotation
+                    </p>
 
-                  <div>
-                    <div className="flex items-center mb-2">
-                      <input
-                        type="checkbox"
-                        id="hasEndDate"
-                        checked={showEndDate}
-                        onChange={(e) => setShowEndDate(e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                      />
-                      <label htmlFor="hasEndDate" className="ml-2 block text-sm text-gray-700">
-                        Set an end date (optional)
-                      </label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="breakfastCount" className="block text-sm font-medium text-gray-700">
+                          🌅 Breakfast Recipes
+                        </label>
+                        <input
+                          type="number"
+                          id="breakfastCount"
+                          value={breakfastCount}
+                          onChange={(e) => setBreakfastCount(Math.max(0, parseInt(e.target.value) || 0))}
+                          min="0"
+                          max="20"
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 border"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="lunchCount" className="block text-sm font-medium text-gray-700">
+                          🌤️ Lunch Recipes
+                        </label>
+                        <input
+                          type="number"
+                          id="lunchCount"
+                          value={lunchCount}
+                          onChange={(e) => setLunchCount(Math.max(0, parseInt(e.target.value) || 0))}
+                          min="0"
+                          max="20"
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 border"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="dinnerCount" className="block text-sm font-medium text-gray-700">
+                          🌙 Dinner Recipes
+                        </label>
+                        <input
+                          type="number"
+                          id="dinnerCount"
+                          value={dinnerCount}
+                          onChange={(e) => setDinnerCount(Math.max(0, parseInt(e.target.value) || 0))}
+                          min="0"
+                          max="20"
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 border"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="snackCount" className="block text-sm font-medium text-gray-700">
+                          🍎 Snack Recipes
+                        </label>
+                        <input
+                          type="number"
+                          id="snackCount"
+                          value={snackCount}
+                          onChange={(e) => setSnackCount(Math.max(0, parseInt(e.target.value) || 0))}
+                          min="0"
+                          max="20"
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 border"
+                        />
+                      </div>
                     </div>
-                    
-                    {showEndDate && (
-                      <input
-                        type="date"
-                        id="endDate"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        min={startDate}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 border"
-                      />
-                    )}
                   </div>
 
                   <div className="pt-4">
@@ -256,10 +313,11 @@ export default function MealPlanCreator() {
               <div className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
                 <h4 className="font-medium text-gray-900 mb-2">📋 What happens next?</h4>
                 <ul className="text-sm text-gray-600 space-y-1 ml-4 list-disc">
-                  <li>A meal plan will be created with meals distributed across {mealsPerDay} meals per day</li>
-                  <li>Each day will target approximately {dailyCalorieTarget || '...'} kcal based on your BMR and activity level</li>
-                  <li>You can then select and customize recipes for each meal</li>
+                  <li>A meal plan will be created with slots for your selected meal types</li>
+                  <li>Each meal will be targeted to fit your daily {dailyCalorieTarget || '...'} kcal goal</li>
+                  <li>You can then select and customize recipes for each meal slot</li>
                   <li>The system will help balance your macros (protein, carbs, fat)</li>
+                  <li>Rotate through your recipes for variety throughout the week</li>
                 </ul>
               </div>
             </div>
@@ -280,25 +338,33 @@ export default function MealPlanCreator() {
                   {existingPlans.map((plan) => (
                     <div
                       key={plan.mealPlanId}
-                      className="border border-gray-200 rounded-lg p-4 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer"
+                      className="border border-gray-200 rounded-lg p-4 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer relative"
                       onClick={() => handleViewPlan(plan.mealPlanId)}
                     >
-                      <h3 className="font-semibold text-gray-900 mb-1">{plan.planName}</h3>
-                      <p className="text-xs text-gray-500">
-                        Start: {new Date(plan.startDate).toLocaleDateString()}
-                      </p>
-                      {plan.endDate && (
-                        <p className="text-xs text-gray-500">
-                          End: {new Date(plan.endDate).toLocaleDateString()}
-                        </p>
-                      )}
-                      {plan.totalKcal && (
-                        <div className="mt-2 pt-2 border-t border-gray-100">
-                          <p className="text-xs font-medium text-blue-600">
-                            {Math.round(plan.totalKcal)} kcal/day
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900 mb-1">{plan.planName}</h3>
+                          <p className="text-xs text-gray-500">
+                            Created: {new Date(plan.createdAt).toLocaleDateString()}
                           </p>
+                          {plan.totalKcal && (
+                            <div className="mt-2 pt-2 border-t border-gray-100">
+                              <p className="text-xs font-medium text-blue-600">
+                                Target: {Math.round(plan.totalKcal)} kcal/day
+                              </p>
+                            </div>
+                          )}
                         </div>
-                      )}
+                        <button
+                          onClick={(e) => handleDeletePlan(plan.mealPlanId, plan.planName, e)}
+                          className="ml-2 p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete meal plan"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
