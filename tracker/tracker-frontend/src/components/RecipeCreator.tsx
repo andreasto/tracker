@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, Ingredient, RecipeIngredient } from '../services/api'
+import IngredientSearch from './IngredientSearch'
+import { EnhancedIngredient } from '../services/productApiService'
 
 export default function RecipeCreator() {
   const navigate = useNavigate()
@@ -22,8 +24,6 @@ export default function RecipeCreator() {
   
   // Ingredient management
   const [selectedIngredients, setSelectedIngredients] = useState<RecipeIngredient[]>([])
-  const [currentIngredientId, setCurrentIngredientId] = useState<number | ''>('')
-  const [currentQuantity, setCurrentQuantity] = useState<number | ''>('')
   
   // New ingredient form
   const [showNewIngredientForm, setShowNewIngredientForm] = useState(false)
@@ -32,6 +32,11 @@ export default function RecipeCreator() {
   const [newIngredientProtein, setNewIngredientProtein] = useState<number | ''>('')
   const [newIngredientFat, setNewIngredientFat] = useState<number | ''>('')
   const [newIngredientCarbs, setNewIngredientCarbs] = useState<number | ''>('')
+  
+  // Quantity modal state
+  const [showQuantityModal, setShowQuantityModal] = useState(false)
+  const [pendingIngredient, setPendingIngredient] = useState<EnhancedIngredient | null>(null)
+  const [quantityInput, setQuantityInput] = useState('100')
 
   useEffect(() => {
     fetchIngredients()
@@ -48,26 +53,58 @@ export default function RecipeCreator() {
     }
   }
 
-  const handleAddIngredient = () => {
-    if (!currentIngredientId || !currentQuantity) {
-      setError('Please select an ingredient and enter quantity')
+  const handleIngredientSelected = async (ingredient: EnhancedIngredient) => {
+    // Add the synced ingredient to available ingredients if not already present
+    const exists = availableIngredients.find(i => i.ingredientId === ingredient.ingredientId)
+    if (!exists) {
+      setAvailableIngredients([...availableIngredients, ingredient as Ingredient])
+    }
+    
+    // Show modal for quantity input
+    setPendingIngredient(ingredient)
+    setQuantityInput('100')
+    setShowQuantityModal(true)
+    setError(null)
+  }
+  
+  const handleQuantitySubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!pendingIngredient) return
+    
+    const quantity = Number(quantityInput)
+    
+    if (isNaN(quantity) || quantity <= 0) {
+      setError('Please enter a valid quantity greater than 0')
       return
     }
-
-    const ingredient = availableIngredients.find(i => i.ingredientId === Number(currentIngredientId))
-    if (!ingredient) return
-
+    
     const newIngredient: RecipeIngredient = {
-      recipeId: 0, // Will be set by backend
-      ingredientId: Number(currentIngredientId),
-      quantityG: Number(currentQuantity),
-      ingredientName: ingredient.name
+      recipeId: 0,
+      ingredientId: pendingIngredient.ingredientId,
+      quantityG: quantity,
+      ingredientName: pendingIngredient.name
     }
-
+    
     setSelectedIngredients([...selectedIngredients, newIngredient])
-    setCurrentIngredientId('')
-    setCurrentQuantity('')
+    
+    // Show success message
+    const tempDiv = document.createElement('div')
+    tempDiv.className = 'fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg shadow-lg z-50'
+    tempDiv.textContent = `✓ ${pendingIngredient.name} (${quantity}g) added to recipe!`
+    document.body.appendChild(tempDiv)
+    setTimeout(() => tempDiv.remove(), 3000)
+    
+    // Close modal
+    setShowQuantityModal(false)
+    setPendingIngredient(null)
     setError(null)
+  }
+  
+  const handleQuantityCancel = () => {
+    setShowQuantityModal(false)
+    setPendingIngredient(null)
+    setQuantityInput('100')
   }
 
   const handleRemoveIngredient = (index: number) => {
@@ -108,7 +145,7 @@ export default function RecipeCreator() {
     }
 
     try {
-      const result = await api.createIngredient({
+      await api.createIngredient({
         name: newIngredientName.trim(),
         caloriesPer100G: newIngredientCalories ? Number(newIngredientCalories) : undefined,
         proteinPer100G: newIngredientProtein ? Number(newIngredientProtein) : undefined,
@@ -156,7 +193,7 @@ export default function RecipeCreator() {
     try {
       const nutrition = calculateNutrition()
       
-      const result = await api.createRecipe({
+      await api.createRecipe({
         title: title.trim(),
         description: description.trim() || undefined,
         totalCalories: nutrition.calories,
@@ -304,13 +341,21 @@ export default function RecipeCreator() {
                   onClick={() => setShowNewIngredientForm(!showNewIngredientForm)}
                   className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                 >
-                  {showNewIngredientForm ? 'Cancel' : '+ Add New Ingredient'}
+                  {showNewIngredientForm ? 'Cancel' : '+ Add Custom Ingredient'}
                 </button>
+              </div>
+
+              {/* Product Search - Primary method */}
+              <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
+                <IngredientSearch onIngredientSelected={handleIngredientSelected} />
               </div>
 
               {showNewIngredientForm && (
                 <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                  <h3 className="font-medium mb-3">Create New Ingredient</h3>
+                  <h3 className="font-medium mb-3">Create Custom Ingredient</h3>
+                  <p className="text-sm text-gray-600 mb-3">
+                    Use this only if you can't find the ingredient in product search above.
+                  </p>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2">
                       <input
@@ -359,35 +404,6 @@ export default function RecipeCreator() {
                   </button>
                 </div>
               )}
-
-              <div className="flex gap-3 mb-4">
-                <select
-                  value={currentIngredientId}
-                  onChange={(e) => setCurrentIngredientId(e.target.value ? Number(e.target.value) : '')}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select ingredient...</option>
-                  {availableIngredients.map(ing => (
-                    <option key={ing.ingredientId} value={ing.ingredientId}>
-                      {ing.name}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  value={currentQuantity}
-                  onChange={(e) => setCurrentQuantity(e.target.value ? Number(e.target.value) : '')}
-                  placeholder="Quantity (g)"
-                  className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddIngredient}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                >
-                  Add
-                </button>
-              </div>
 
               {selectedIngredients.length > 0 && (
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -487,6 +503,55 @@ export default function RecipeCreator() {
           </form>
         </div>
       </div>
+
+      {/* Quantity Modal */}
+      {showQuantityModal && pendingIngredient && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-xl font-semibold mb-4 text-gray-900">
+              Add Ingredient Weight
+            </h3>
+            <p className="text-gray-600 mb-4">
+              How many grams of <strong>{pendingIngredient.name}</strong> do you want to add?
+            </p>
+            
+            <form onSubmit={handleQuantitySubmit}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Weight (grams)
+                </label>
+                <input
+                  type="number"
+                  value={quantityInput}
+                  onChange={(e) => setQuantityInput(e.target.value)}
+                  min="0.1"
+                  step="0.1"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+                  placeholder="100"
+                  autoFocus
+                  required
+                />
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleQuantityCancel}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                >
+                  Add to Recipe
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

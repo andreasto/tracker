@@ -41,7 +41,31 @@ if (akkaSettings?.PersistenceMode == PersistenceMode.PostgreSql)
         
         // Register RecipeService
         builder.Services.AddSingleton<IRecipeService>(sp => new RecipeService(connectionString));
+        
+        // Register ProductService
+        builder.Services.AddSingleton<IProductService>(sp => new ProductService(
+            connectionString,
+            sp.GetRequiredService<IProductApiClient>(),
+            sp.GetRequiredService<ILogger<ProductService>>()));
     }
+}
+
+// Configure HttpClient for Product API
+var productApiBaseUrl = builder.Configuration["ProductApi:BaseUrl"];
+if (!string.IsNullOrEmpty(productApiBaseUrl))
+{
+    builder.Services.AddHttpClient<IProductApiClient, ProductApiClient>(client =>
+    {
+        client.BaseAddress = new Uri(productApiBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(30);
+        
+        // Add any headers if needed (e.g., API key)
+        var apiKey = builder.Configuration["ProductApi:ApiKey"];
+        if (!string.IsNullOrEmpty(apiKey))
+        {
+            client.DefaultRequestHeaders.Add("X-API-Key", apiKey);
+        }
+    });
 }
 
 // Add services to the container.
@@ -52,14 +76,11 @@ builder.Services.ConfigureWebApiAkka(builder.Configuration, (akkaConfigurationBu
     akkaConfigurationBuilder.ConfigurePetabridgeCmd();
 });
 
-// Register JWT Service and Refresh Token Service
 builder.Services.AddSingleton<IJwtService, JwtService>();
 builder.Services.AddSingleton<IRefreshTokenService, RefreshTokenService>();
 
-// Register Email Lookup Service (choose based on persistence mode)
 if (akkaSettings?.PersistenceMode == PersistenceMode.PostgreSql)
 {
-    // Production: Use PostgreSQL for persistent email lookup
     var connectionString = builder.Configuration.GetConnectionString("PostgreSql");
     if (!string.IsNullOrEmpty(connectionString))
     {
@@ -70,28 +91,22 @@ if (akkaSettings?.PersistenceMode == PersistenceMode.PostgreSql)
     }
     else
     {
-        // Fallback to in-memory if no connection string
         builder.Services.AddSingleton<IEmailLookupService, EmailLookupService>();
     }
 }
 else
 {
-    // Development: Use in-memory (faster, simpler)
-    // WARNING: All email mappings lost on restart!
     builder.Services.AddSingleton<IEmailLookupService, EmailLookupService>();
 }
 
-// Configure Memory Cache for rate limiting
 builder.Services.AddMemoryCache();
 
-// Configure IP Rate Limiting
 builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
 builder.Services.AddSingleton<IIpPolicyStore, MemoryCacheIpPolicyStore>();
 builder.Services.AddSingleton<IRateLimitCounterStore, MemoryCacheRateLimitCounterStore>();
 builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 builder.Services.AddSingleton<IProcessingStrategy, AsyncKeyLockProcessingStrategy>();
 
-// Configure JWT Authentication
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;

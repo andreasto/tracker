@@ -222,14 +222,12 @@ public static class UserExtensions
 
 public sealed class UserActor : ReceivePersistentActor
 {
-    // currently, do not persist subscribers, but would be easy to add
     private readonly HashSet<IActorRef> _subscribers = new();
     private User _user;
     private readonly ILoggingAdapter _log = Context.GetLogger();
 
     public UserActor(string userId)
     {
-        // distinguish both type and entity Id in the EventJournal
         PersistenceId = $"User_{userId}";
         _user = new User(userId, string.Empty, string.Empty, false);
 
